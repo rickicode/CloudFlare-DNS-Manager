@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloudflare DNS Manager - Setup</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <p>Checking session...</p>
+    </div>
+    
+    <header>
+        <div class="container">
+            <div class="logo"><i class="fa-brands fa-cloudflare"></i> DNS Manager</div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="form-card">
+            <h1>API Setup</h1>
+            <p>To manage your DNS records, please provide your Cloudflare API credentials.</p>
+            
+            <div id="notifications"></div>
+            
+            <form id="api-form">
+                <div class="form-group">
+                    <label for="email"><i class="fas fa-envelope"></i> Cloudflare Email:</label>
+                    <input type="email" id="email" class="form-control" placeholder="Your Cloudflare account email" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="api-key"><i class="fas fa-key"></i> Cloudflare Global API Key:</label>
+                    <input type="password" id="api-key" class="form-control" placeholder="Your Global API Key" required>
+                    <small class="help-text">
+                        You can find your Global API Key in the <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank">Cloudflare dashboard</a> under Profile &gt; API Tokens &gt; Global API Key.
+                    </small>
+                </div>
+                
+                <div class="form-group">
+                    <label class="checkbox-container">
+                        <input type="checkbox" id="save-credentials" checked>
+                        <span class="checkmark"></span>
+                        Remember credentials for 30 days (stored locally in your browser)
+                    </label>
+                    <small class="help-text">
+                        Your credentials will be stored securely in your browser's local storage and automatically cleared after 30 days.
+                    </small>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn">
+                        <i class="fas fa-check-circle"></i> Test API Credentials
+                    </button>
+                </div>
+            </form>
+        </div>
+        
+        <div class="info-card">
+            <h2><i class="fas fa-info-circle"></i> Instructions</h2>
+            <p>This tool allows you to manage DNS records for your domains registered with Cloudflare.</p>
+            <ol>
+                <li>Enter your Cloudflare email and Global API Key above</li>
+                <li>Click "Test API Credentials" to validate your credentials</li>
+                <li>Once validated, you will be redirected to select a domain</li>
+                <li>Choose a domain and manage its DNS records</li>
+            </ol>
+            <p><strong>Note:</strong> Your API credentials can be stored locally in your browser for convenience. When stored, they are encrypted and automatically deleted after 30 days or when you clear your browser data.</p>
+        </div>
+    </div>
+
+    <script src="/static/js/script.js"></script>
+</body>
+</html>

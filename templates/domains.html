@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloudflare DNS Manager - Domains</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="logo"><i class="fa-brands fa-cloudflare"></i> DNS Manager</div>
+            <div class="navigation">
+                <a href="/" class="btn btn-outline">
+                    <i class="fas fa-key"></i> Change API Key
+                </a>
+                <a href="/logout" class="btn btn-logout">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="card">
+            <h1><i class="fas fa-globe"></i> Select Domain</h1>
+            <p>Choose a domain from your Cloudflare account to manage its DNS records:</p>
+            
+            <div id="notifications"></div>
+            
+            <div class="form-group">
+                <label for="domain-select"><i class="fas fa-server"></i> Domain:</label>
+                <select id="domain-select" class="form-control">
+                    <option value="">Loading domains...</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="records-header">
+                <h2><i class="fas fa-list"></i> Available Domains</h2>
+            </div>
+            <div id="domains-list" class="domains-list">
+                <p>Loading domains...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/script.js"></script>
+</body>
+</html>

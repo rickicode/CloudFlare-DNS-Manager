@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloudflare DNS Manager - {{ .Domain }}</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="logo"><i class="fa-brands fa-cloudflare"></i> DNS Manager</div>
+            <div class="navigation">
+                <a href="/domains" class="btn btn-outline">
+                    <i class="fas fa-arrow-left"></i> Back to Domains
+                </a>
+                <a href="/" class="btn btn-outline">
+                    <i class="fas fa-key"></i> Change API Key
+                </a>
+                <a href="/logout" class="btn btn-logout">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="form-card">
+            <h1><i class="fas fa-server"></i> DNS Records for {{ .Domain }}</h1>
+            <p>Add or update DNS records for this domain using the form below:</p>
+            
+            <div id="notifications"></div>
+            
+            <form id="dns-form">
+                <input type="hidden" id="domain-name" value="{{ .Domain }}">
+                
+                <div class="form-group">
+                    <label for="dns-records"><i class="fas fa-list"></i> DNS Records (one per line):</label>
+                    <textarea id="dns-records" class="form-control" placeholder="Format: TYPE|NAME|CONTENT&#10;Example: A|@|192.0.2.1&#10;Example: CNAME|www|example.com" rows="8"></textarea>
+                    <small class="help-text">
+                        <p><strong>Format:</strong> TYPE|NAME|CONTENT</p>
+                        <p><strong>TYPE:</strong> Supported types: A, AAAA, CNAME, MX, TXT, NS, SRV, CAA, PTR</p>
+                        <p><strong>NAME:</strong> Use @ for root domain, or enter subdomain</p>
+                        <p><strong>CONTENT:</strong> Depends on record type:</p>
+                        <ul class="record-content-help">
+                            <li><strong>A</strong>: IPv4 address (e.g., 192.0.2.1)</li>
+                            <li><strong>AAAA</strong>: IPv6 address (e.g., 2001:db8::1)</li>
+                            <li><strong>CNAME</strong>: Domain name (e.g., example.com or @)</li>
+                            <li><strong>MX</strong>: Priority and mail server (e.g., 10 mail.example.com)</li>
+                            <li><strong>TXT</strong>: Text content (e.g., v=spf1 include:_spf.example.com ~all)</li>
+                            <li><strong>NS</strong>: Nameserver domain (e.g., ns1.example.com)</li>
+                        </ul>
+                        <p><strong>Examples:</strong></p>
+                        <ul>
+                            <li>A|@|192.0.2.1</li>
+                            <li>A|mail|192.0.2.2</li>
+                            <li>CNAME|www|{{ .Domain }}</li>
+                            <li>CNAME|www|@</li>
+                            <li>A|shop|@</li>
+                            <li>A|buy|@</li>
+                        </ul>
+                        <p><strong>Note:</strong> When @ is used in the CONTENT field, it represents the root domain. For A records, it will use the IP address of the root domain.</p>
+                    </small>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn">
+                        <i class="fas fa-cloud-upload-alt"></i> Add DNS Records
+                    </button>
+                </div>
+            </form>
+            
+            <!-- Results Log -->
+            <div id="results-log" class="results-log hidden">
+                <h3><i class="fas fa-list-ul"></i> Operation Results</h3>
+                <div id="results-content" class="results-content"></div>
+            </div>
+        </div>
+        
+        <div class="records-container">
+            <div class="records-header">
+                <h2><i class="fas fa-table"></i> Current DNS Records</h2>
+                <button id="refresh-records" class="btn btn-accent btn-sm">
+                    <i class="fas fa-sync"></i> Refresh
+                </button>
+            </div>
+            <table id="dns-records-table" class="records-table">
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Name</th>
+                        <th>Content</th>
+                        <th>Proxied</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td colspan="5">Loading DNS records...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- Edit Record Modal -->
+    <div id="edit-record-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">Edit DNS Record</div>
+                <button class="modal-close" id="close-edit-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="edit-record-form">
+                    <input type="hidden" id="edit-record-id">
+                    
+                    <div class="form-group">
+                        <label for="edit-record-type">Type:</label>
+                        <select id="edit-record-type" class="form-control" required>
+                            <option value="A">A</option>
+                            <option value="AAAA">AAAA</option>
+                            <option value="CNAME">CNAME</option>
+                            <option value="MX">MX</option>
+                            <option value="TXT">TXT</option>
+                            <option value="NS">NS</option>
+                            <option value="SRV">SRV</option>
+                            <option value="CAA">CAA</option>
+                            <option value="PTR">PTR</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="edit-record-name">Name:</label>
+                        <input type="text" id="edit-record-name" class="form-control" placeholder="@ for root domain or subdomain name" required>
+                        <small class="help-text">Use @ for root domain or enter subdomain name without domain</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="edit-record-content">Content:</label>
+                        <input type="text" id="edit-record-content" class="form-control" placeholder="IP address or domain" required>
+                        <small class="help-text">For A records, enter an IPv4 address. For CNAME records, enter a domain. You can use @ to represent the root domain.</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="edit-record-proxied">
+                            <span>Proxied through Cloudflare</span>
+                        </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancel-edit">Cancel</button>
+                <button class="btn" id="save-record">Save Changes</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Delete Confirmation Modal -->
+    <div id="delete-record-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">Delete DNS Record</div>
+                <button class="modal-close" id="close-delete-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this DNS record?</p>
+                <p id="delete-record-details" style="font-weight: bold;"></p>
+                <p>This action cannot be undone.</p>
+                <input type="hidden" id="delete-record-id">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancel-delete">Cancel</button>
+                <button class="btn" id="confirm-delete">Delete Record</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/script.js"></script>
+</body>
+</html>
