@@ -121,7 +121,7 @@ func GetAPIClient(c *fiber.Ctx, store *session.Store) (*cloudflare.API, error) {
 
 	// Check if API credentials exist in session
 	valid := sess.Get(KeyAPIValid)
-	if valid == nil || valid.(bool) == false {
+	if valid == nil || !valid.(bool) {
 		return nil, fiber.NewError(fiber.StatusUnauthorized, "API credentials not found or invalid")
 	}
 

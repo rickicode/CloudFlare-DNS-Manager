@@ -114,7 +114,7 @@ func RenderDNSPageHandler(store *session.Store) fiber.Handler {
 		}
 
 		valid := sess.Get(KeyAPIValid)
-		if valid == nil || valid.(bool) == false {
+		if valid == nil || !valid.(bool) {
 			return c.Redirect("/")
 		}
 

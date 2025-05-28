@@ -55,7 +55,7 @@ function showCopyFeedback(feedbackElement) {
 }
 
 // Credential storage configuration
-const CREDENTIAL_STORAGE_KEY = 'cloudflare_dns_credentials';
+const CREDENTIAL_STORAGE_KEY = 'cloudflare_dns_credentials_multiple';
 const CREDENTIAL_EXPIRY_DAYS = 30;
 
 // DNS Templates configuration
@@ -75,17 +75,28 @@ document.addEventListener('DOMContentLoaded', function() {
     initApp();
 });
 
-// Credential storage functions
+// Multiple credential storage functions
 function saveCredentials(email, apiKey) {
-    const credentials = {
+    const newCredential = {
         email: email,
         apiKey: apiKey,
         timestamp: Date.now(),
-        expiryTime: Date.now() + (CREDENTIAL_EXPIRY_DAYS * 24 * 60 * 60 * 1000)
+        expiryTime: Date.now() + (CREDENTIAL_EXPIRY_DAYS * 24 * 60 * 60 * 1000),
+        label: email // Use email as label for now
     };
     
     try {
-        localStorage.setItem(CREDENTIAL_STORAGE_KEY, JSON.stringify(credentials));
+        let storedCredentials = getAllStoredCredentials();
+        
+        // Check if this email already exists, if so update it
+        const existingIndex = storedCredentials.findIndex(cred => cred.email === email);
+        if (existingIndex !== -1) {
+            storedCredentials[existingIndex] = newCredential;
+        } else {
+            storedCredentials.push(newCredential);
+        }
+        
+        localStorage.setItem(CREDENTIAL_STORAGE_KEY, JSON.stringify(storedCredentials));
         return true;
     } catch (error) {
         console.error('Failed to save credentials:', error);
@@ -93,41 +104,68 @@ function saveCredentials(email, apiKey) {
     }
 }
 
-function loadCredentials() {
+function getAllStoredCredentials() {
     try {
         const stored = localStorage.getItem(CREDENTIAL_STORAGE_KEY);
-        if (!stored) return null;
+        if (!stored) return [];
         
         const credentials = JSON.parse(stored);
         
-        // Check if credentials have expired
-        if (Date.now() > credentials.expiryTime) {
-            clearCredentials();
-            return null;
+        // Filter out expired credentials
+        const validCredentials = credentials.filter(cred => {
+            return Date.now() <= cred.expiryTime;
+        });
+        
+        // If some credentials were expired, save the filtered list
+        if (validCredentials.length !== credentials.length) {
+            localStorage.setItem(CREDENTIAL_STORAGE_KEY, JSON.stringify(validCredentials));
         }
         
-        return {
-            email: credentials.email,
-            apiKey: credentials.apiKey
-        };
+        return validCredentials;
     } catch (error) {
         console.error('Failed to load credentials:', error);
         clearCredentials();
+        return [];
+    }
+}
+
+function loadCredentials(email = null) {
+    try {
+        const allCredentials = getAllStoredCredentials();
+        
+        if (email) {
+            // Return specific credential by email
+            return allCredentials.find(cred => cred.email === email) || null;
+        } else {
+            // Return the most recently used credential
+            if (allCredentials.length === 0) return null;
+            return allCredentials.sort((a, b) => b.timestamp - a.timestamp)[0];
+        }
+    } catch (error) {
+        console.error('Failed to load credentials:', error);
         return null;
     }
 }
 
-function clearCredentials() {
+function clearCredentials(email = null) {
     try {
-        localStorage.removeItem(CREDENTIAL_STORAGE_KEY);
+        if (email) {
+            // Clear specific credential by email
+            let storedCredentials = getAllStoredCredentials();
+            storedCredentials = storedCredentials.filter(cred => cred.email !== email);
+            localStorage.setItem(CREDENTIAL_STORAGE_KEY, JSON.stringify(storedCredentials));
+        } else {
+            // Clear all credentials
+            localStorage.removeItem(CREDENTIAL_STORAGE_KEY);
+        }
     } catch (error) {
         console.error('Failed to clear credentials:', error);
     }
 }
 
 function hasStoredCredentials() {
-    const credentials = loadCredentials();
-    return credentials !== null;
+    const credentials = getAllStoredCredentials();
+    return credentials.length > 0;
 }
 
 // DNS Templates Management Functions
@@ -190,9 +228,54 @@ function getDNSTemplateRecords(templateId) {
 
 // Check and load stored credentials on home page
 function checkAndLoadStoredCredentials() {
-    const credentials = loadCredentials();
+    const allCredentials = getAllStoredCredentials();
+    const savedCredentialsGroup = document.getElementById('saved-credentials-group');
+    const savedCredentialsSelect = document.getElementById('saved-credentials-select');
+    
+    if (allCredentials.length > 0) {
+        // Show the saved credentials dropdown
+        if (savedCredentialsGroup) {
+            savedCredentialsGroup.style.display = 'block';
+        }
+        
+        // Populate the dropdown with saved credentials
+        if (savedCredentialsSelect) {
+            savedCredentialsSelect.innerHTML = '<option value="">Select saved credentials or enter new ones</option>';
+            
+            allCredentials.forEach((cred, index) => {
+                const option = document.createElement('option');
+                option.value = cred.email;
+                option.textContent = `${cred.email} (saved ${new Date(cred.timestamp).toLocaleDateString()})`;
+                savedCredentialsSelect.appendChild(option);
+            });
+            
+            // Add event listener for credential selection
+            savedCredentialsSelect.addEventListener('change', function() {
+                const selectedEmail = this.value;
+                if (selectedEmail) {
+                    loadAndFillCredentials(selectedEmail);
+                } else {
+                    // Clear form when "Select saved credentials" is chosen
+                    clearCredentialForm();
+                }
+            });
+        }
+        
+        // Auto-fill with the most recent credential
+        const mostRecent = loadCredentials();
+        if (mostRecent) {
+            loadAndFillCredentials(mostRecent.email);
+            if (savedCredentialsSelect) {
+                savedCredentialsSelect.value = mostRecent.email;
+            }
+        }
+    }
+}
+
+// Load and fill credentials for a specific email
+function loadAndFillCredentials(email) {
+    const credentials = loadCredentials(email);
     if (credentials) {
-        // Auto-fill the form with stored credentials
         const emailField = document.getElementById('email');
         const apiKeyField = document.getElementById('api-key');
         const saveCheckbox = document.getElementById('save-credentials');
@@ -207,9 +290,20 @@ function checkAndLoadStoredCredentials() {
             saveCheckbox.checked = true;
         }
         
-        // Show "Test API Credential" button and hide/modify the original submit button
+        // Show "Test API Credential" button
         showTestCredentialButton();
     }
+}
+
+// Clear the credential form
+function clearCredentialForm() {
+    const emailField = document.getElementById('email');
+    const apiKeyField = document.getElementById('api-key');
+    
+    if (emailField) emailField.value = '';
+    if (apiKeyField) apiKeyField.value = '';
+    
+    hideTestCredentialButton();
 }
 
 // Show test credential button instead of regular submit button
@@ -241,24 +335,19 @@ function showTestCredentialButton() {
         testBtn.addEventListener('click', testStoredCredentials);
     }
     
-    // Add "Clear Stored Credentials" button
-    let clearBtn = formActions.querySelector('#clear-stored-credentials');
-    if (!clearBtn) {
-        clearBtn = document.createElement('button');
-        clearBtn.type = 'button';
-        clearBtn.id = 'clear-stored-credentials';
-        clearBtn.className = 'btn btn-outline';
-        clearBtn.innerHTML = '<i class="fas fa-trash"></i> Clear Stored Credentials';
-        formActions.appendChild(clearBtn);
+    // Add "Manage Saved Credentials" button
+    let manageBtn = formActions.querySelector('#manage-saved-credentials');
+    if (!manageBtn) {
+        manageBtn = document.createElement('button');
+        manageBtn.type = 'button';
+        manageBtn.id = 'manage-saved-credentials';
+        manageBtn.className = 'btn btn-outline';
+        manageBtn.innerHTML = '<i class="fas fa-cog"></i> Manage Saved Credentials';
+        formActions.appendChild(manageBtn);
         
-        // Add event listener for clear button
-        clearBtn.addEventListener('click', function() {
-            clearCredentials();
-            // Reset form and buttons
-            document.getElementById('email').value = '';
-            document.getElementById('api-key').value = '';
-            hideTestCredentialButton();
-            showNotification('Stored credentials cleared', 'info');
+        // Add event listener for manage button
+        manageBtn.addEventListener('click', function() {
+            openManageCredentialsModal();
         });
     }
 }
@@ -277,11 +366,11 @@ function hideTestCredentialButton() {
         originalSubmitBtn.style.display = '';
     }
     
-    // Remove test and clear buttons
+    // Remove test and manage buttons
     const testBtn = formActions.querySelector('#test-stored-credentials');
-    const clearBtn = formActions.querySelector('#clear-stored-credentials');
+    const manageBtn = formActions.querySelector('#manage-saved-credentials');
     if (testBtn) testBtn.remove();
-    if (clearBtn) clearBtn.remove();
+    if (manageBtn) manageBtn.remove();
 }
 
 // Test stored credentials
@@ -1714,4 +1803,144 @@ function showNotification(message, type = 'success') {
             notificationsContainer.removeChild(notificationEl);
         }, 300);
     }, 5000);
+}
+
+// Manage Credentials Modal Functions
+function openManageCredentialsModal() {
+    const modal = document.getElementById('manage-credentials-modal');
+    if (modal) {
+        modal.classList.add('active');
+        populateCredentialsList();
+        setupManageCredentialsModal();
+    }
+}
+
+function closeManageCredentialsModal() {
+    const modal = document.getElementById('manage-credentials-modal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+}
+
+function populateCredentialsList() {
+    const credentialsList = document.getElementById('saved-credentials-list');
+    if (!credentialsList) return;
+    
+    const allCredentials = getAllStoredCredentials();
+    
+    if (allCredentials.length === 0) {
+        credentialsList.innerHTML = '<div class="no-credentials">No saved credentials found</div>';
+        return;
+    }
+    
+    credentialsList.innerHTML = '';
+    allCredentials.forEach((credential, index) => {
+        const credentialItem = document.createElement('div');
+        credentialItem.className = 'credential-item';
+        
+        const savedDate = new Date(credential.timestamp).toLocaleDateString();
+        const expiryDate = new Date(credential.expiryTime).toLocaleDateString();
+        
+        credentialItem.innerHTML = `
+            <div class="credential-info">
+                <div class="credential-email">${escapeHtml(credential.email)}</div>
+                <div class="credential-details">
+                    <small>Saved: ${savedDate} | Expires: ${expiryDate}</small>
+                </div>
+            </div>
+            <div class="credential-actions">
+                <button class="btn btn-sm" onclick="loadCredentialToForm('${escapeHtml(credential.email)}')">
+                    <i class="fas fa-edit"></i> Load
+                </button>
+                <button class="btn btn-outline btn-sm" onclick="deleteSavedCredential('${escapeHtml(credential.email)}')">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            </div>
+        `;
+        
+        credentialsList.appendChild(credentialItem);
+    });
+}
+
+function setupManageCredentialsModal() {
+    const closeBtn = document.getElementById('close-manage-credentials-modal');
+    const closeModalBtn = document.getElementById('close-manage-modal');
+    const clearAllBtn = document.getElementById('clear-all-credentials');
+    
+    if (closeBtn) {
+        closeBtn.removeEventListener('click', closeManageCredentialsModal);
+        closeBtn.addEventListener('click', closeManageCredentialsModal);
+    }
+    
+    if (closeModalBtn) {
+        closeModalBtn.removeEventListener('click', closeManageCredentialsModal);
+        closeModalBtn.addEventListener('click', closeManageCredentialsModal);
+    }
+    
+    if (clearAllBtn) {
+        clearAllBtn.removeEventListener('click', clearAllSavedCredentials);
+        clearAllBtn.addEventListener('click', clearAllSavedCredentials);
+    }
+    
+    // Close modal when clicking outside
+    const modal = document.getElementById('manage-credentials-modal');
+    if (modal) {
+        modal.removeEventListener('click', handleModalOutsideClick);
+        modal.addEventListener('click', handleModalOutsideClick);
+    }
+}
+
+function handleModalOutsideClick(e) {
+    if (e.target === e.currentTarget) {
+        closeManageCredentialsModal();
+    }
+}
+
+function loadCredentialToForm(email) {
+    loadAndFillCredentials(email);
+    closeManageCredentialsModal();
+    
+    // Update the saved credentials select if it exists
+    const savedCredentialsSelect = document.getElementById('saved-credentials-select');
+    if (savedCredentialsSelect) {
+        savedCredentialsSelect.value = email;
+    }
+    
+    showNotification('Credentials loaded successfully!', 'success');
+}
+
+function deleteSavedCredential(email) {
+    if (confirm(`Are you sure you want to delete the saved credentials for ${email}?`)) {
+        clearCredentials(email);
+        populateCredentialsList();
+        
+        // Update the main form if this was the selected credential
+        const savedCredentialsSelect = document.getElementById('saved-credentials-select');
+        if (savedCredentialsSelect && savedCredentialsSelect.value === email) {
+            savedCredentialsSelect.value = '';
+            clearCredentialForm();
+        }
+        
+        // Update the saved credentials dropdown
+        checkAndLoadStoredCredentials();
+        
+        showNotification(`Credentials for ${email} deleted successfully`, 'info');
+    }
+}
+
+function clearAllSavedCredentials() {
+    if (confirm('Are you sure you want to delete ALL saved credentials? This action cannot be undone.')) {
+        clearCredentials();
+        populateCredentialsList();
+        closeManageCredentialsModal();
+        
+        // Reset the form and hide the saved credentials section
+        clearCredentialForm();
+        const savedCredentialsGroup = document.getElementById('saved-credentials-group');
+        if (savedCredentialsGroup) {
+            savedCredentialsGroup.style.display = 'none';
+        }
+        
+        showNotification('All saved credentials cleared', 'info');
+    }
 }

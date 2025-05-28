@@ -10,7 +10,7 @@
 <body>
     <header>
         <div class="container">
-            <div class="logo"><i class="fa-brands fa-cloudflare"></i> DNS Manager</div>
+            <a href="/" class="logo"><i class="fa-brands fa-cloudflare"></i> DNS Manager</a>
             <div class="navigation">
                 <a href="/domains" class="btn btn-outline">
                     <i class="fas fa-arrow-left"></i> Back to Domains
@@ -89,35 +89,36 @@
         <div class="records-container">
             <div class="records-header">
                 <h2><i class="fas fa-table"></i> Current DNS Records</h2>
-                <div class="records-controls">
-                    <div class="form-group">
-                        <input type="text" id="search-records" class="form-control" placeholder="Search DNS records...">
-                    </div>
-                    <div class="form-group">
-                        <select id="type-filter" class="form-control">
-                            <option value="">All Types</option>
-                            <option value="A">A</option>
-                            <option value="AAAA">AAAA</option>
-                            <option value="CNAME">CNAME</option>
-                            <option value="MX">MX</option>
-                            <option value="TXT">TXT</option>
-                            <option value="NS">NS</option>
-                            <option value="SRV">SRV</option>
-                            <option value="CAA">CAA</option>
-                            <option value="PTR">PTR</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <select id="proxied-filter" class="form-control">
-                            <option value="">All Records</option>
-                            <option value="true">Proxied Only</option>
-                            <option value="false">Direct Only</option>
-                        </select>
-                    </div>
-                    <button id="refresh-records" class="btn btn-accent btn-sm">
-                        <i class="fas fa-sync"></i> Refresh
-                    </button>
+            </div>
+            
+            <div class="records-controls">
+                <div class="form-group">
+                    <input type="text" id="search-records" class="form-control" placeholder="Search DNS records...">
                 </div>
+                <div class="form-group">
+                    <select id="type-filter" class="form-control">
+                        <option value="">All Types</option>
+                        <option value="A">A</option>
+                        <option value="AAAA">AAAA</option>
+                        <option value="CNAME">CNAME</option>
+                        <option value="MX">MX</option>
+                        <option value="TXT">TXT</option>
+                        <option value="NS">NS</option>
+                        <option value="SRV">SRV</option>
+                        <option value="CAA">CAA</option>
+                        <option value="PTR">PTR</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <select id="proxied-filter" class="form-control">
+                        <option value="">All Records</option>
+                        <option value="true">Proxied Only</option>
+                        <option value="false">Direct Only</option>
+                    </select>
+                </div>
+                <button id="refresh-records" class="btn btn-accent btn-sm">
+                    <i class="fas fa-sync"></i> Refresh
+                </button>
             </div>
             
             <div class="records-stats">

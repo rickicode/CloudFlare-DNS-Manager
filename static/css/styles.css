@@ -76,6 +76,14 @@ header .container {
   font-size: 24px;
   font-weight: bold;
   color: var(--primary-color);
+  text-decoration: none;
+  transition: var(--transition);
+  cursor: pointer;
+}
+
+.logo:hover {
+  color: var(--primary-dark);
+  text-decoration: none;
 }
 
 .navigation {
@@ -627,10 +635,14 @@ textarea.form-control {
 }
 
 .records-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   margin-bottom: 20px;
+}
+
+.records-header h2 {
+  margin: 0 0 15px 0;
+  font-size: 1.5em;
+  color: var(--text-color);
+  font-weight: 600;
 }
 
 .records-table {
@@ -971,21 +983,61 @@ textarea.form-control {
 /* Search and Filter Styles */
 .records-controls {
   display: flex;
-  gap: 15px;
-  align-items: flex-end;
+  gap: 12px;
+  align-items: center;
+  background-color: var(--search-bg);
+  padding: 16px;
+  border-radius: var(--border-radius);
+  border: 1px solid var(--border-color);
   flex-wrap: wrap;
-  margin-bottom: 20px;
+  min-height: 60px;
 }
 
 .records-controls .form-group {
   margin-bottom: 0;
+  position: relative;
+  min-width: 140px;
+}
+
+.records-controls .form-group:first-child {
   flex: 1;
   min-width: 200px;
+  max-width: 300px;
+}
+
+.records-controls .form-control {
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 14px;
+  background-color: white;
+  transition: var(--transition);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.records-controls .form-control:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(0, 153, 255, 0.1);
+  outline: none;
 }
 
 .records-controls .btn {
   margin-bottom: 0;
-  align-self: flex-end;
+  padding: 8px 16px;
+  font-size: 14px;
+  border-radius: 6px;
+  white-space: nowrap;
+  min-width: auto;
+}
+
+.records-controls .btn-accent {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+}
+
+.records-controls .btn-accent:hover {
+  background-color: var(--primary-dark);
 }
 
 /* Records Stats */
@@ -1193,24 +1245,31 @@ textarea.form-control {
 
 /* Responsive Updates for Search */
 @media (max-width: 768px) {
+  .records-header h2 {
+    font-size: 1.3em;
+    margin-bottom: 12px;
+  }
+
   .records-controls {
     flex-direction: column;
     align-items: stretch;
-    gap: 10px;
+    gap: 12px;
+    padding: 12px;
   }
 
-  .search-container {
+  .records-controls .form-group {
     min-width: auto;
     max-width: none;
   }
 
-  .filter-container {
-    justify-content: space-between;
+  .records-controls .form-group:first-child {
+    min-width: auto;
+    max-width: none;
   }
 
-  .filter-select {
-    flex: 1;
-    min-width: auto;
+  .records-controls .btn {
+    width: 100%;
+    justify-content: center;
   }
 
   .records-stats {
@@ -1411,6 +1470,97 @@ textarea.form-control {
 
   .no-records-message i {
     font-size: 36px;
+  }
+}
+
+/* Manage Credentials Modal Styles */
+.credentials-list {
+  max-height: 400px;
+  overflow-y: auto;
+  margin-bottom: 20px;
+}
+
+.credential-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  margin-bottom: 10px;
+  background-color: var(--card-bg);
+}
+
+.credential-info {
+  flex: 1;
+}
+
+.credential-email {
+  font-weight: 600;
+  color: var(--text-color);
+  margin-bottom: 4px;
+}
+
+.credential-details {
+  color: var(--text-light);
+  font-size: 0.85em;
+}
+
+.credential-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.credential-actions .btn {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.no-credentials {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-light);
+  font-style: italic;
+}
+
+.modal-actions {
+  padding: 15px 0;
+  border-top: 1px solid var(--border-color);
+  margin-top: 15px;
+}
+
+/* Saved Credentials Dropdown Styles */
+#saved-credentials-group {
+  background-color: var(--search-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: 15px;
+  margin-bottom: 15px;
+}
+
+#saved-credentials-group label {
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+#saved-credentials-select {
+  margin-top: 8px;
+}
+
+/* Mobile responsiveness for credential management */
+@media (max-width: 768px) {
+  .credential-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  
+  .credential-actions {
+    justify-content: stretch;
+  }
+  
+  .credential-actions .btn {
+    flex: 1;
   }
 }
 }

@@ -27,6 +27,16 @@
             <div id="notifications"></div>
             
             <form id="api-form">
+                <div class="form-group" id="saved-credentials-group" style="display: none;">
+                    <label for="saved-credentials-select"><i class="fas fa-history"></i> Saved Credentials:</label>
+                    <select id="saved-credentials-select" class="form-control">
+                        <option value="">Select saved credentials or enter new ones</option>
+                    </select>
+                    <small class="help-text">
+                        Choose from previously saved API credentials or enter new ones below.
+                    </small>
+                </div>
+                
                 <div class="form-group">
                     <label for="email"><i class="fas fa-envelope"></i> Cloudflare Email:</label>
                     <input type="email" id="email" class="form-control" placeholder="Your Cloudflare account email" required>
@@ -69,6 +79,30 @@
                 <li>Choose a domain and manage its DNS records</li>
             </ol>
             <p><strong>Note:</strong> Your API credentials can be stored locally in your browser for convenience. When stored, they are encrypted and automatically deleted after 30 days or when you clear your browser data.</p>
+        </div>
+    </div>
+
+    <!-- Manage Saved Credentials Modal -->
+    <div id="manage-credentials-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-cog"></i> Manage Saved Credentials</h3>
+                <button id="close-manage-credentials-modal" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="saved-credentials-list" class="credentials-list">
+                    <!-- Saved credentials will be populated here -->
+                </div>
+                
+                <div class="modal-actions">
+                    <button id="clear-all-credentials" class="btn btn-outline">
+                        <i class="fas fa-trash-alt"></i> Clear All Credentials
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="close-manage-modal" class="btn btn-outline">Close</button>
+            </div>
         </div>
     </div>
 
