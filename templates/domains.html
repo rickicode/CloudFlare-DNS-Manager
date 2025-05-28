@@ -12,9 +12,6 @@
         <div class="container">
             <div class="logo"><i class="fa-brands fa-cloudflare"></i> DNS Manager</div>
             <div class="navigation">
-                <a href="/" class="btn btn-outline">
-                    <i class="fas fa-key"></i> Change API Key
-                </a>
                 <a href="/logout" class="btn btn-logout">
                     <i class="fas fa-sign-out-alt"></i> Logout
                 </a>
@@ -38,11 +35,96 @@
         </div>
         
         <div class="card">
+            <h2><i class="fas fa-plus-circle"></i> Add New Domains</h2>
+            <p>Add multiple domains to your Cloudflare account. Enter one domain per line:</p>
+            
+            <form id="add-domains-form">
+                <div class="form-group">
+                    <label for="domains-input"><i class="fas fa-globe"></i> Domains to Add:</label>
+                    <textarea id="domains-input" class="form-control" rows="6" placeholder="example1.com&#10;example2.com&#10;example3.com" required></textarea>
+                    <small class="help-text">
+                        Enter one domain per line. Each domain will be added to Cloudflare and you'll receive the nameservers to configure at your domain registrar.
+                    </small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="dns-template-select"><i class="fas fa-list"></i> DNS Template:</label>
+                    <select id="dns-template-select" class="form-control">
+                        <option value="">No Template</option>
+                        <option value="default">Default Template (A, CNAME)</option>
+                    </select>
+                    <small class="help-text">
+                        Select a DNS template to automatically add DNS records when creating domains.
+                    </small>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn">
+                        <i class="fas fa-plus-circle"></i> Add Domains
+                    </button>
+                    <button type="button" id="manage-templates-btn" class="btn btn-secondary">
+                        <i class="fas fa-cog"></i> Manage Templates
+                    </button>
+                </div>
+            </form>
+            
+            <!-- Results section for add domains -->
+            <div id="add-domains-results" class="results-log hidden">
+                <h3><i class="fas fa-list-check"></i> Domain Addition Results</h3>
+                <div id="add-domains-content" class="results-content"></div>
+            </div>
+        </div>
+        
+        <div class="card">
             <div class="records-header">
                 <h2><i class="fas fa-list"></i> Available Domains</h2>
             </div>
             <div id="domains-list" class="domains-list">
                 <p>Loading domains...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- DNS Templates Management Modal -->
+    <div id="dns-templates-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-cog"></i> Manage DNS Templates</h3>
+                <button id="close-templates-modal" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="template-name"><i class="fas fa-tag"></i> Template Name:</label>
+                    <input type="text" id="template-name" class="form-control" placeholder="My Custom Template">
+                </div>
+                
+                <div class="form-group">
+                    <label for="template-records"><i class="fas fa-list"></i> DNS Records:</label>
+                    <textarea id="template-records" class="form-control" rows="8" placeholder="A|@|138.199.137.90|true&#10;CNAME|www|@|true&#10;CNAME|shop|@|true&#10;CNAME|buy|@|true"></textarea>
+                    <small class="help-text">
+                        Enter DNS records in format: TYPE|NAME|CONTENT|PROXIED (one per line)<br>
+                        Example: A|@|192.168.1.1|true or CNAME|www|@|false<br>
+                        PROXIED: true/false (optional, defaults to true for A/AAAA/CNAME records)
+                    </small>
+                </div>
+                
+                <div class="form-actions">
+                    <button id="save-template" class="btn">
+                        <i class="fas fa-save"></i> Save Template
+                    </button>
+                    <button id="cancel-template" class="btn btn-outline">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+                
+                <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
+                
+                <div class="existing-templates">
+                    <h4><i class="fas fa-list"></i> Existing Templates</h4>
+                    <div id="templates-list" class="templates-list">
+                        <!-- Templates will be populated here -->
+                    </div>
+                </div>
             </div>
         </div>
     </div>

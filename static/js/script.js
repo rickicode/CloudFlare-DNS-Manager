@@ -1,13 +1,80 @@
 // Main JavaScript file for Cloudflare DNS Manager
 
+// Copy nameserver to clipboard function
+function copyNameserverToClipboard(element) {
+    const nameserver = element.getAttribute('data-nameserver');
+    const feedback = element.querySelector('.copy-feedback');
+    
+    // Use modern clipboard API if available
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(nameserver).then(() => {
+            showCopyFeedback(feedback);
+        }).catch(() => {
+            // Fallback to legacy method
+            fallbackCopyToClipboard(nameserver, feedback);
+        });
+    } else {
+        // Fallback for older browsers or non-secure contexts
+        fallbackCopyToClipboard(nameserver, feedback);
+    }
+}
+
+// Fallback copy method for older browsers
+function fallbackCopyToClipboard(text, feedback) {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-999999px';
+    textArea.style.top = '-999999px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    
+    try {
+        document.execCommand('copy');
+        showCopyFeedback(feedback);
+    } catch (err) {
+        console.error('Failed to copy nameserver:', err);
+        showNotification('Failed to copy nameserver', 'error');
+    }
+    
+    document.body.removeChild(textArea);
+}
+
+// Show copy feedback animation
+function showCopyFeedback(feedbackElement) {
+    if (feedbackElement) {
+        feedbackElement.classList.add('show');
+        setTimeout(() => {
+            feedbackElement.classList.remove('show');
+        }, 2000);
+    }
+    
+    // Also show a notification
+    showNotification('Nameserver copied to clipboard!', 'success');
+}
+
 // Credential storage configuration
 const CREDENTIAL_STORAGE_KEY = 'cloudflare_dns_credentials';
 const CREDENTIAL_EXPIRY_DAYS = 30;
+
+// DNS Templates configuration
+const DNS_TEMPLATES_STORAGE_KEY = 'cloudflare_dns_templates';
+const DEFAULT_DNS_TEMPLATE = {
+    name: 'Default Template',
+    records: [
+        'A|@|138.199.137.90|true',
+        'CNAME|www|@|true',
+        'CNAME|shop|@|true',
+        'CNAME|buy|@|true'
+    ]
+};
 
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize the application
     initApp();
 });
+
 // Credential storage functions
 function saveCredentials(email, apiKey) {
     const credentials = {
@@ -62,6 +129,65 @@ function hasStoredCredentials() {
     const credentials = loadCredentials();
     return credentials !== null;
 }
+
+// DNS Templates Management Functions
+function loadDNSTemplates() {
+    try {
+        const stored = localStorage.getItem(DNS_TEMPLATES_STORAGE_KEY);
+        if (!stored) {
+            // Initialize with default template
+            const defaultTemplates = {
+                'default': DEFAULT_DNS_TEMPLATE
+            };
+            saveDNSTemplates(defaultTemplates);
+            return defaultTemplates;
+        }
+        return JSON.parse(stored);
+    } catch (error) {
+        console.error('Failed to load DNS templates:', error);
+        return { 'default': DEFAULT_DNS_TEMPLATE };
+    }
+}
+
+function saveDNSTemplates(templates) {
+    try {
+        localStorage.setItem(DNS_TEMPLATES_STORAGE_KEY, JSON.stringify(templates));
+        return true;
+    } catch (error) {
+        console.error('Failed to save DNS templates:', error);
+        return false;
+    }
+}
+
+function addDNSTemplate(name, records) {
+    const templates = loadDNSTemplates();
+    const templateId = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    
+    templates[templateId] = {
+        name: name,
+        records: records
+    };
+    
+    return saveDNSTemplates(templates);
+}
+
+function deleteDNSTemplate(templateId) {
+    const templates = loadDNSTemplates();
+    
+    // Don't allow deleting default template
+    if (templateId === 'default') {
+        return false;
+    }
+    
+    delete templates[templateId];
+    return saveDNSTemplates(templates);
+}
+
+function getDNSTemplateRecords(templateId) {
+    const templates = loadDNSTemplates();
+    return templates[templateId] ? templates[templateId].records : [];
+}
+
 // Check and load stored credentials on home page
 function checkAndLoadStoredCredentials() {
     const credentials = loadCredentials();
@@ -107,7 +233,7 @@ function showTestCredentialButton() {
         testBtn = document.createElement('button');
         testBtn.type = 'button';
         testBtn.id = 'test-stored-credentials';
-        testBtn.className = 'btn btn-secondary';
+        testBtn.className = 'btn btn-success';
         testBtn.innerHTML = '<i class="fas fa-check-circle"></i> Test API Credential';
         formActions.appendChild(testBtn);
         
@@ -206,12 +332,244 @@ function testStoredCredentials() {
     });
 }
 
+// DNS Templates Setup
+function setupDNSTemplates() {
+    // Load templates and populate select dropdown
+    populateTemplateSelect();
+    
+    // Setup manage templates button
+    const manageTemplatesBtn = document.getElementById('manage-templates-btn');
+    if (manageTemplatesBtn) {
+        manageTemplatesBtn.addEventListener('click', openTemplatesModal);
+    }
+    
+    // Setup modal event listeners
+    setupTemplatesModal();
+}
+
+// Populate template select dropdown
+function populateTemplateSelect() {
+    const templateSelect = document.getElementById('dns-template-select');
+    if (!templateSelect) return;
+    
+    const templates = loadDNSTemplates();
+    
+    // Clear existing options except "No Template"
+    templateSelect.innerHTML = '<option value="">No Template</option>';
+    
+    // Add templates to select
+    Object.keys(templates).forEach(templateId => {
+        const template = templates[templateId];
+        const option = document.createElement('option');
+        option.value = templateId;
+        option.textContent = template.name;
+        templateSelect.appendChild(option);
+    });
+}
+
+// Open templates management modal
+function openTemplatesModal() {
+    const modal = document.getElementById('dns-templates-modal');
+    if (modal) {
+        modal.classList.add('active');
+        populateTemplatesList();
+    }
+}
+
+// Close templates modal
+function closeTemplatesModal() {
+    const modal = document.getElementById('dns-templates-modal');
+    if (modal) {
+        modal.classList.remove('active');
+        // Clear form
+        document.getElementById('template-name').value = '';
+        document.getElementById('template-records').value = '';
+    }
+}
+
+// Setup templates modal event listeners
+function setupTemplatesModal() {
+    const closeBtn = document.getElementById('close-templates-modal');
+    const cancelBtn = document.getElementById('cancel-template');
+    const saveBtn = document.getElementById('save-template');
+    
+    if (closeBtn) closeBtn.addEventListener('click', closeTemplatesModal);
+    if (cancelBtn) cancelBtn.addEventListener('click', closeTemplatesModal);
+    if (saveBtn) saveBtn.addEventListener('click', saveNewTemplate);
+    
+    // Close modal when clicking outside
+    const modal = document.getElementById('dns-templates-modal');
+    if (modal) {
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+                closeTemplatesModal();
+            }
+        });
+    }
+}
+
+// Save new template
+function saveNewTemplate() {
+    const nameInput = document.getElementById('template-name');
+    const recordsInput = document.getElementById('template-records');
+    
+    const name = nameInput.value.trim();
+    const recordsText = recordsInput.value.trim();
+    
+    if (!name) {
+        showNotification('Please enter a template name', 'error');
+        return;
+    }
+    
+    if (!recordsText) {
+        showNotification('Please enter DNS records', 'error');
+        return;
+    }
+    
+    // Parse and validate records
+    const records = recordsText.split('\n').filter(line => line.trim() !== '');
+    let hasErrors = false;
+    
+    records.forEach(record => {
+        const parts = record.split('|');
+        if (parts.length < 3 || parts.length > 4) {
+            showNotification(`Invalid record format: ${record}. Use TYPE|NAME|CONTENT or TYPE|NAME|CONTENT|PROXIED format.`, 'error');
+            hasErrors = true;
+        }
+    });
+    
+    if (hasErrors) return;
+    
+    // Save template
+    const saved = addDNSTemplate(name, records);
+    if (saved) {
+        showNotification('Template saved successfully!', 'success');
+        populateTemplateSelect();
+        populateTemplatesList();
+        // Clear form
+        nameInput.value = '';
+        recordsInput.value = '';
+    } else {
+        showNotification('Failed to save template', 'error');
+    }
+}
+
+// Populate templates list in modal
+function populateTemplatesList() {
+    const templatesList = document.getElementById('templates-list');
+    if (!templatesList) return;
+    
+    const templates = loadDNSTemplates();
+    templatesList.innerHTML = '';
+    
+    if (Object.keys(templates).length === 0) {
+        templatesList.innerHTML = '<div class="no-templates">No templates found</div>';
+        return;
+    }
+    
+    Object.keys(templates).forEach(templateId => {
+        const template = templates[templateId];
+        const templateItem = document.createElement('div');
+        templateItem.className = 'template-item';
+        
+        templateItem.innerHTML = `
+            <div class="template-info">
+                <div class="template-name">${template.name}</div>
+                <div class="template-records-count">${template.records.length} DNS records</div>
+            </div>
+            <div class="template-actions">
+                ${templateId !== 'default' ? `
+                    <button class="edit-template" onclick="editTemplate('${templateId}')">
+                        <i class="fas fa-edit"></i> Edit
+                    </button>
+                    <button class="delete-template" onclick="deleteTemplate('${templateId}')">
+                        <i class="fas fa-trash"></i> Delete
+                    </button>
+                ` : '<span style="color: #999; font-size: 12px;">Default template</span>'}
+            </div>
+        `;
+        
+        templatesList.appendChild(templateItem);
+    });
+}
+
+// Edit template
+function editTemplate(templateId) {
+    const templates = loadDNSTemplates();
+    const template = templates[templateId];
+    
+    if (!template) return;
+    
+    document.getElementById('template-name').value = template.name;
+    document.getElementById('template-records').value = template.records.join('\n');
+    
+    // Change save button to update
+    const saveBtn = document.getElementById('save-template');
+    saveBtn.textContent = 'Update Template';
+    saveBtn.onclick = () => updateTemplate(templateId);
+}
+
+// Update template
+function updateTemplate(templateId) {
+    const nameInput = document.getElementById('template-name');
+    const recordsInput = document.getElementById('template-records');
+    
+    const name = nameInput.value.trim();
+    const recordsText = recordsInput.value.trim();
+    
+    if (!name || !recordsText) {
+        showNotification('Please fill all fields', 'error');
+        return;
+    }
+    
+    const records = recordsText.split('\n').filter(line => line.trim() !== '');
+    
+    // Update template
+    const templates = loadDNSTemplates();
+    templates[templateId] = {
+        name: name,
+        records: records
+    };
+    
+    const saved = saveDNSTemplates(templates);
+    if (saved) {
+        showNotification('Template updated successfully!', 'success');
+        populateTemplateSelect();
+        populateTemplatesList();
+        
+        // Reset form
+        nameInput.value = '';
+        recordsInput.value = '';
+        const saveBtn = document.getElementById('save-template');
+        saveBtn.textContent = 'Save Template';
+        saveBtn.onclick = saveNewTemplate;
+    } else {
+        showNotification('Failed to update template', 'error');
+    }
+}
+
+// Delete template
+function deleteTemplate(templateId) {
+    if (confirm('Are you sure you want to delete this template?')) {
+        const deleted = deleteDNSTemplate(templateId);
+        if (deleted) {
+            showNotification('Template deleted successfully!', 'success');
+            populateTemplateSelect();
+            populateTemplatesList();
+        } else {
+            showNotification('Failed to delete template', 'error');
+        }
+    }
+}
+
 // Main app initialization
 function initApp() {
     // Setup form handlers
     setupAPIForm();
     setupDomainSelect();
     setupDNSForm();
+    setupAddDomainsForm();
+    setupDNSTemplates();
     
     // Check if we're already on a specific page
     const path = window.location.pathname;
@@ -307,6 +665,183 @@ function setupAPIForm() {
     });
 }
 
+// Add Domains Form Setup
+function setupAddDomainsForm() {
+    const addDomainsForm = document.getElementById('add-domains-form');
+    if (!addDomainsForm) return;
+
+    addDomainsForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const domainsText = document.getElementById('domains-input').value.trim();
+        
+        // Validate inputs
+        if (!domainsText) {
+            showNotification('Please enter at least one domain', 'error');
+            return;
+        }
+        
+        // Basic validation for domains format
+        const domainLines = domainsText.split('\n').filter(line => line.trim() !== '');
+        let hasErrors = false;
+        
+        domainLines.forEach(line => {
+            const domain = line.trim();
+            if (!isValidDomainFormat(domain)) {
+                showNotification(`Invalid domain format: ${domain}`, 'error');
+                hasErrors = true;
+            }
+        });
+        
+        if (hasErrors) return;
+        
+        // Get selected DNS template
+        const templateSelect = document.getElementById('dns-template-select');
+        const selectedTemplate = templateSelect ? templateSelect.value : '';
+        
+        // Get template records if a template is selected
+        let templateRecords = [];
+        if (selectedTemplate) {
+            templateRecords = getDNSTemplateRecords(selectedTemplate);
+        }
+        
+        // Disable form and show loading state
+        const submitBtn = addDomainsForm.querySelector('button[type="submit"]');
+        const originalText = submitBtn.textContent;
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Adding Domains...';
+        
+        // Send add domains request
+        fetch('/api/domains/add', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+                domains: domainsText,
+                template: selectedTemplate,
+                templateRecords: templateRecords
+            }),
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification(data.message, 'success');
+                
+                // Display detailed results
+                displayAddDomainsResults(data.results);
+                
+                // Clear the form
+                document.getElementById('domains-input').value = '';
+                
+                // Reload domains list
+                setTimeout(() => {
+                    loadDomains();
+                }, 2000);
+            } else {
+                showNotification(`Error: ${data.message || 'Failed to add domains'}`, 'error');
+            }
+        })
+        .catch(error => {
+            showNotification(`Error: ${error.message || 'Something went wrong'}`, 'error');
+        })
+        .finally(() => {
+            // Re-enable form
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+        });
+    });
+}
+
+// Validate domain format (basic validation)
+function isValidDomainFormat(domain) {
+    const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]?\.([a-zA-Z]{2,}\.?)+$/;
+    return domain.length >= 3 && domain.length <= 253 && domainRegex.test(domain);
+}
+
+// Display add domains results
+function displayAddDomainsResults(results) {
+    const resultsSection = document.getElementById('add-domains-results');
+    const resultsContent = document.getElementById('add-domains-content');
+    
+    if (!resultsSection || !resultsContent) return;
+    
+    // Clear previous results
+    resultsContent.innerHTML = '';
+    
+    // Count successes and failures
+    const successCount = results.filter(r => r.success).length;
+    const failCount = results.filter(r => !r.success).length;
+    
+    // Add summary
+    const summaryEl = document.createElement('div');
+    summaryEl.className = 'result-summary';
+    summaryEl.innerHTML = `<strong>Summary:</strong> ${successCount} domains added successfully, ${failCount} failed.`;
+    resultsContent.appendChild(summaryEl);
+    
+    // Add separator
+    const separator = document.createElement('hr');
+    separator.style.margin = '15px 0';
+    separator.style.border = '0';
+    separator.style.borderTop = '1px solid #ddd';
+    resultsContent.appendChild(separator);
+    
+    // Add individual result items
+    results.forEach(result => {
+        const resultItem = document.createElement('div');
+        
+        // Set appropriate class based on result type
+        let className = 'result-item domain-result';
+        let icon = '';
+        
+        if (result.success) {
+            className += ' success';
+            icon = '<i class="fas fa-check-circle result-icon"></i>';
+        } else {
+            className += ' error';
+            icon = '<i class="fas fa-times-circle result-icon"></i>';
+        }
+        
+        resultItem.className = className;
+        
+        // Create content with nameservers if available
+        let nameserversHtml = '';
+        if (result.nameservers && result.nameservers.length > 0) {
+            nameserversHtml = `
+                <div class="nameservers-info">
+                    <strong>Nameservers to configure at your domain registrar:</strong>
+                    <ul class="nameservers-list">
+                        ${result.nameservers.map(ns => `<li class="nameserver-item" data-nameserver="${ns}">${ns}<span class="copy-feedback">Copied!</span></li>`).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+        
+        resultItem.innerHTML = `
+            ${icon}
+            <div class="result-details">
+                <strong>${result.domain}</strong>
+                <div class="result-message">${result.message}</div>
+                ${result.error ? `<div class="error-details">${result.error}</div>` : ''}
+                ${nameserversHtml}
+            </div>
+        `;
+        
+        resultsContent.appendChild(resultItem);
+        
+        // Add click event listeners to nameserver items after adding to DOM
+        const nameserverItems = resultItem.querySelectorAll('.nameserver-item');
+        nameserverItems.forEach(item => {
+            item.addEventListener('click', function() {
+                copyNameserverToClipboard(this);
+            });
+        });
+    });
+    
+    // Show the results section
+    resultsSection.classList.remove('hidden');
+}
+
 // Domain Selection Setup
 function setupDomainSelect() {
     const domainSelect = document.getElementById('domain-select');
@@ -373,10 +908,11 @@ function loadDomains() {
             }
         })
         .catch(error => {
-            showNotification(`Error: ${error.message || 'Failed to load domains'}`, 'error');
+            const errorMsg = `Error loading domains: ${error.message}`;
             if (domainsList) {
-                domainsList.innerHTML = `<p class="error">Error loading domains: ${error.message || 'Unknown error'}</p>`;
+                domainsList.innerHTML = `<p class="error">${errorMsg}</p>`;
             }
+            showNotification(errorMsg, 'error');
         });
 }
 
@@ -389,83 +925,39 @@ function setupDNSForm() {
         e.preventDefault();
         
         const domain = document.getElementById('domain-name').value;
-        const records = document.getElementById('dns-records').value;
+        const recordsText = document.getElementById('dns-records').value;
         
-        // Validate inputs
-        if (!records) {
-            showNotification('Please enter DNS records', 'error');
+        if (!domain || !recordsText) {
+            showNotification('Please enter both domain and DNS records', 'error');
             return;
         }
         
-        // Basic validation for record format
-        const recordLines = records.split('\n').filter(line => line.trim() !== '');
-        let hasErrors = false;
-        
-        recordLines.forEach(line => {
-            const parts = line.split('|');
-            if (parts.length !== 3) {
-                showNotification(`Invalid record format: ${line}. Use TYPE|NAME|CONTENT format.`, 'error');
-                hasErrors = true;
-            } else {
-                const type = parts[0].trim().toUpperCase();
-                const validTypes = ["A", "AAAA", "CNAME", "MX", "TXT", "NS", "SRV", "CAA", "PTR"];
-                if (!validTypes.includes(type)) {
-                    showNotification(`Invalid record type: ${type}. Supported types: ${validTypes.join(', ')}`, 'error');
-                    hasErrors = true;
-                }
-                
-                // Special validation for MX records, which require priority
-                if (type === 'MX') {
-                    const content = parts[2].trim();
-                    if (!content.includes(' ')) {
-                        showNotification(`MX record content must include priority (e.g., '10 mail.example.com')`, 'error');
-                        hasErrors = true;
-                    }
-                }
-            }
-        });
-        
-        if (hasErrors) return;
-        
-        // Disable form and show loading state
+        // Disable form
         const submitBtn = dnsForm.querySelector('button[type="submit"]');
         const originalText = submitBtn.textContent;
         submitBtn.disabled = true;
-        submitBtn.textContent = 'Updating DNS...';
+        submitBtn.textContent = 'Processing...';
         
-        // Send update request
+        // Send DNS update request
         fetch(`/api/dns/${domain}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ records }),
+            body: JSON.stringify({ records: recordsText }),
         })
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                showNotification('DNS records updated successfully!', 'success');
+                showNotification(data.message, 'success');
                 
-                // Display results
-                const results = data.results || [];
-                const successCount = results.filter(r => r.success).length;
-                const failCount = results.filter(r => !r.success).length;
-                
-                let resultMessage = `Successfully processed ${successCount} records.`;
-                if (failCount > 0) {
-                    resultMessage += ` ${failCount} records failed.`;
+                // Display results if available
+                if (data.results) {
+                    displayResultsLog(data.results);
                 }
                 
-                showNotification(resultMessage, 'success');
-                
                 // Reload DNS records
-                // Display detailed results in the log section
-                displayResultsLog(results);
-                
-                // Reload DNS records
-                setTimeout(() => {
-                    loadDNSRecords(domain);
-                }, 1000);
+                loadDNSRecords(domain);
             } else {
                 showNotification(`Error: ${data.message || 'Failed to update DNS records'}`, 'error');
             }
@@ -482,246 +974,111 @@ function setupDNSForm() {
 }
 
 // Load DNS Records
-// DNS Records Management
-let dnsRecords = []; // Global store of DNS records for the current domain
-
 function loadDNSRecords(domain) {
-    const recordsTable = document.getElementById('dns-records-table');
-    if (!recordsTable) return;
+    const recordsContainer = document.getElementById('dns-records-display');
+    if (!recordsContainer) return;
     
-    const tbody = recordsTable.querySelector('tbody') || recordsTable;
+    recordsContainer.innerHTML = '<p>Loading DNS records...</p>';
     
-    // Show loading state
-    tbody.innerHTML = '<tr><td colspan="5">Loading DNS records...</td></tr>';
-    
-    // Fetch DNS records
     fetch(`/api/dns/${domain}`)
         .then(response => response.json())
         .then(data => {
-            if (!data.success) {
-                throw new Error(data.message || 'Failed to load DNS records');
-            }
-            
-            dnsRecords = data.data || []; // Store records globally
-            
-            if (dnsRecords.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5">No DNS records found for this domain.</td></tr>';
+            if (data.success) {
+                displayDNSRecords(data.data);
             } else {
-                tbody.innerHTML = '';
-                dnsRecords.forEach(record => {
-                    const row = document.createElement('tr');
-                    row.dataset.id = record.id; // Store record ID in row for reference
-                    
-                    // Format the name to show subdomain or @
-                    let displayName = record.name;
-                    if (displayName === domain) {
-                        displayName = '@';
-                    } else if (displayName.endsWith(`.${domain}`)) {
-                        displayName = displayName.replace(`.${domain}`, '');
-                    }
-                    
-                    row.innerHTML = `
-                        <td>${record.type}</td>
-                        <td>${displayName}</td>
-                        <td>${record.content}</td>
-                        <td>${record.proxied ? 'Yes' : 'No'}</td>
-                        <td class="record-actions">
-                            <button class="edit-record btn-modern" title="Edit Record">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                            <button class="delete-record btn-modern" title="Delete Record">
-                                <i class="fas fa-trash-alt"></i>
-                            </button>
-                        </td>
-                    `;
-                    
-                    // Add event listeners to buttons
-                    const editButton = row.querySelector('.edit-record');
-                    const deleteButton = row.querySelector('.delete-record');
-                    
-                    editButton.addEventListener('click', () => openEditModal(record.id, domain));
-                    deleteButton.addEventListener('click', () => openDeleteModal(record.id, domain));
-                    
-                    tbody.appendChild(row);
-                });
+                throw new Error(data.message || 'Failed to load DNS records');
             }
         })
         .catch(error => {
-            showNotification(`Error: ${error.message || 'Failed to load DNS records'}`, 'error');
-            tbody.innerHTML = `<tr><td colspan="5" class="error">Error loading DNS records: ${error.message || 'Unknown error'}</td></tr>`;
+            recordsContainer.innerHTML = `<p class="error">Error loading DNS records: ${error.message}</p>`;
+            showNotification(`Error loading DNS records: ${error.message}`, 'error');
         });
 }
 
-// Refresh records button
-document.addEventListener('DOMContentLoaded', function() {
-    const refreshButton = document.getElementById('refresh-records');
-    if (refreshButton) {
-        refreshButton.addEventListener('click', function() {
-            const domainName = document.getElementById('domain-name').value;
-            loadDNSRecords(domainName);
-        });
-    }
-});
-
-// Modal handling functions
-function openEditModal(recordId, domain) {
-    // Find the record from our global store
-    const record = dnsRecords.find(r => r.id === recordId);
-    if (!record) {
-        showNotification('Record not found', 'error');
+// Display DNS Records
+function displayDNSRecords(records) {
+    const container = document.getElementById('dns-records-display');
+    if (!container) return;
+    
+    if (!records || records.length === 0) {
+        container.innerHTML = '<p>No DNS records found for this domain.</p>';
         return;
     }
     
-    // Format the name to show subdomain or @
-    let displayName = record.name;
-    if (displayName === domain) {
-        displayName = '@';
-    } else if (displayName.endsWith(`.${domain}`)) {
-        displayName = displayName.replace(`.${domain}`, '');
-    }
+    let html = `
+        <div class="records-header">
+            <div class="record-type">Type</div>
+            <div class="record-name">Name</div>
+            <div class="record-content">Content</div>
+            <div class="record-actions">Actions</div>
+        </div>
+    `;
     
-    // Populate form fields
-    document.getElementById('edit-record-id').value = record.id;
-    document.getElementById('edit-record-type').value = record.type;
-    document.getElementById('edit-record-name').value = displayName;
-    document.getElementById('edit-record-content').value = record.content;
-    document.getElementById('edit-record-proxied').checked = record.proxied;
+    records.forEach(record => {
+        const proxiedIcon = record.proxied ? '<i class="fas fa-shield-alt" title="Proxied"></i>' : '';
+        html += `
+            <div class="record-row">
+                <div class="record-type">${record.type}</div>
+                <div class="record-name">${record.name}</div>
+                <div class="record-content">${record.content} ${proxiedIcon}</div>
+                <div class="record-actions">
+                    <button class="btn-icon" onclick="editRecord('${record.id}', '${record.type}', '${record.name}', '${record.content}', ${record.proxied})">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn-icon" onclick="deleteRecord('${record.id}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    });
     
-    // Update the content help text based on the record type
-    updateContentHelpText(record.type);
-    
-    // Show modal
-    document.getElementById('edit-record-modal').classList.add('active');
+    container.innerHTML = html;
 }
 
-// Update the help text based on the selected record type
-function updateContentHelpText(recordType) {
-    const helpTextElement = document.querySelector('#edit-record-content + .help-text');
-    if (!helpTextElement) return;
-    
-    let helpText = '';
-    switch(recordType) {
-        case 'A':
-            helpText = 'Enter an IPv4 address (e.g., 192.0.2.1). You can use @ to use the root domain\'s IP.';
-            break;
-        case 'AAAA':
-            helpText = 'Enter an IPv6 address (e.g., 2001:db8::1)';
-            break;
-        case 'CNAME':
-            helpText = 'Enter a domain name (e.g., example.com). You can use @ to represent the root domain.';
-            break;
-        case 'MX':
-            helpText = 'Enter priority and mail server (e.g., 10 mail.example.com)';
-            break;
-        case 'TXT':
-            helpText = 'Enter text content (e.g., v=spf1 include:_spf.example.com ~all)';
-            break;
-        case 'NS':
-            helpText = 'Enter nameserver domain (e.g., ns1.example.com)';
-            break;
-        case 'SRV':
-            helpText = 'Enter priority weight port target (e.g., 10 5 5060 sip.example.com)';
-            break;
-        case 'CAA':
-            helpText = 'Enter flags tag value (e.g., 0 issue "letsencrypt.org")';
-            break;
-        case 'PTR':
-            helpText = 'Enter domain name for reverse DNS (e.g., example.com)';
-            break;
-        default:
-            helpText = 'Enter content appropriate for this record type.';
-    }
-    
-    helpTextElement.textContent = helpText;
-}
-
-function openDeleteModal(recordId, domain) {
-    // Find the record
-    const record = dnsRecords.find(r => r.id === recordId);
-    if (!record) {
-        showNotification('Record not found', 'error');
-        return;
-    }
-    
-    // Format the name to show subdomain or @
-    let displayName = record.name;
-    if (displayName === domain) {
-        displayName = '@';
-    } else if (displayName.endsWith(`.${domain}`)) {
-        displayName = displayName.replace(`.${domain}`, '');
-    }
-    
-    // Set the record ID and details
-    document.getElementById('delete-record-id').value = record.id;
-    document.getElementById('delete-record-details').textContent = 
-        `${record.type} record: ${displayName} → ${record.content}`;
-    
-    // Show modal
-    document.getElementById('delete-record-modal').classList.add('active');
-}
-
+// Modal management functions
 function closeModals() {
-    document.querySelectorAll('.modal-overlay').forEach(modal => {
+    const modals = document.querySelectorAll('.modal-overlay');
+    modals.forEach(modal => {
         modal.classList.remove('active');
     });
 }
 
-// Set up modal event listeners
-document.addEventListener('DOMContentLoaded', function() {
-    // Edit modal
-    const closeEditBtn = document.getElementById('close-edit-modal');
-    const cancelEditBtn = document.getElementById('cancel-edit');
-    const saveRecordBtn = document.getElementById('save-record');
+// Edit record function
+function editRecord(recordId, recordType, recordName, recordContent, proxied) {
+    const domain = document.getElementById('domain-name').value;
     
-    if (closeEditBtn) closeEditBtn.addEventListener('click', closeModals);
-    if (cancelEditBtn) cancelEditBtn.addEventListener('click', closeModals);
-    if (saveRecordBtn) saveRecordBtn.addEventListener('click', saveRecord);
+    // Fill edit form
+    document.getElementById('edit-record-id').value = recordId;
+    document.getElementById('edit-record-type').value = recordType;
+    document.getElementById('edit-record-name').value = recordName;
+    document.getElementById('edit-record-content').value = recordContent;
+    document.getElementById('edit-record-proxied').checked = proxied;
     
-    // Add event listener for record type changes to update help text
-    const typeSelect = document.getElementById('edit-record-type');
-    if (typeSelect) {
-        typeSelect.addEventListener('change', function() {
-            updateContentHelpText(this.value);
-        });
-    }
-    
-    // Delete modal
-    const closeDeleteBtn = document.getElementById('close-delete-modal');
-    const cancelDeleteBtn = document.getElementById('cancel-delete');
-    const confirmDeleteBtn = document.getElementById('confirm-delete');
-    
-    if (closeDeleteBtn) closeDeleteBtn.addEventListener('click', closeModals);
-    if (cancelDeleteBtn) cancelDeleteBtn.addEventListener('click', closeModals);
-    if (confirmDeleteBtn) confirmDeleteBtn.addEventListener('click', deleteRecord);
-});
+    // Show edit modal
+    document.getElementById('edit-modal').classList.add('active');
+}
 
-// Save record function
-function saveRecord() {
+// Save edited record
+function saveEditedRecord() {
     const domain = document.getElementById('domain-name').value;
     const recordId = document.getElementById('edit-record-id').value;
     const recordType = document.getElementById('edit-record-type').value;
-    let recordName = document.getElementById('edit-record-name').value.trim();
-    const recordContent = document.getElementById('edit-record-content').value.trim();
+    const recordName = document.getElementById('edit-record-name').value;
+    let recordContent = document.getElementById('edit-record-content').value;
     const recordProxied = document.getElementById('edit-record-proxied').checked;
     
     // Validate inputs
-    if (!recordName || !recordContent) {
-        showNotification('All fields are required', 'error');
+    if (!recordType || !recordName || !recordContent) {
+        showNotification('Please fill all required fields', 'error');
         return;
     }
-    
-// Format name correctly
-if (recordName === '@') {
-    recordName = domain;
-} else if (!recordName.includes(domain)) {
-    recordName = `${recordName}.${domain}`;
-}
 
-// Handle @ symbol in content field for the edit form
-if (recordContent === '@') {
-    recordContent = domain;
-}
-    
+    // Handle @ symbol in content field for the edit form
+    if (recordContent === '@') {
+        recordContent = domain;
+    }
+        
     // Disable save button and show loading state
     const saveBtn = document.getElementById('save-record');
     const originalText = saveBtn.textContent;
