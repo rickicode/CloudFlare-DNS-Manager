@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  cloudflare-dns-manager:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cloudflare-dns-manager
+    ports:
+      - "3000:3000"
+    environment:
+      # Optional environment variables
+      - TZ=Asia/Bangkok
+      - GIN_MODE=release
+    restart: unless-stopped
+    
+    # Resource limits (optional)
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.25'
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    
+    # Mount volumes if you want to persist templates or logs (optional)
+    # volumes:
+    #   - ./data:/home/appuser/data
+    
+    networks:
+      - cloudflare-net
+
+  # Optional: Add a reverse proxy with SSL termination
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: cloudflare-dns-nginx
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/nginx.conf:ro
+  #     - ./ssl:/etc/nginx/ssl:ro
+  #   depends_on:
+  #     - cloudflare-dns-manager
+  #   restart: unless-stopped
+  #   networks:
+  #     - cloudflare-net
+
+networks:
+  cloudflare-net:
+    driver: bridge
+    name: cloudflare-dns-network
+
+# Optional: Add volumes for data persistence
+# volumes:
+#   cloudflare-data:
+#     driver: local
