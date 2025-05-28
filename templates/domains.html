@@ -78,9 +78,61 @@
         <div class="card">
             <div class="records-header">
                 <h2><i class="fas fa-list"></i> Available Domains</h2>
+                <div class="records-controls">
+                    <div class="form-group">
+                        <input type="text" id="search-domains" class="form-control" placeholder="Search domains...">
+                    </div>
+                    <div class="form-group">
+                        <select id="status-filter" class="form-control">
+                            <option value="">All Status</option>
+                            <option value="active">Active</option>
+                            <option value="pending">Pending</option>
+                            <option value="initializing">Initializing</option>
+                            <option value="moved">Moved</option>
+                            <option value="deleted">Deleted</option>
+                        </select>
+                    </div>
+                    <button id="refresh-domains" class="btn btn-accent btn-sm">
+                        <i class="fas fa-sync"></i> Refresh
+                    </button>
+                </div>
             </div>
-            <div id="domains-list" class="domains-list">
-                <p>Loading domains...</p>
+            
+            <div class="records-stats">
+                <span id="domains-count" class="records-count">Loading...</span>
+                <span id="domains-filtered-count" class="filtered-count hidden"></span>
+            </div>
+            
+            <div class="records-table-container">
+                <table id="domains-table" class="records-table">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-sort="name">
+                                Domain Name <i class="fas fa-sort sort-icon"></i>
+                            </th>
+                            <th class="sortable" data-sort="status">
+                                Status <i class="fas fa-sort sort-icon"></i>
+                            </th>
+                            <th class="sortable" data-sort="created_on">
+                                Created <i class="fas fa-sort sort-icon"></i>
+                            </th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="4" class="loading-row">
+                                <i class="fas fa-spinner fa-spin"></i> Loading domains...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <div id="no-domains-message" class="no-records-message hidden">
+                    <i class="fas fa-search"></i>
+                    <p>No domains found matching your search criteria.</p>
+                    <button id="reset-domain-filters" class="btn btn-outline btn-sm">Reset Filters</button>
+                </div>
             </div>
         </div>
     </div>

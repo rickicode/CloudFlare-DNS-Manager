@@ -33,6 +33,17 @@
                 <input type="hidden" id="domain-name" value="{{ .Domain }}">
                 
                 <div class="form-group">
+                    <label for="dns-template-select-dns"><i class="fas fa-list"></i> DNS Template:</label>
+                    <select id="dns-template-select-dns" class="form-control">
+                        <option value="">No Template</option>
+                        <option value="default">Default Template</option>
+                    </select>
+                    <small class="help-text">
+                        Select a template to auto-fill DNS records below.
+                    </small>
+                </div>
+                
+                <div class="form-group">
                     <label for="dns-records"><i class="fas fa-list"></i> DNS Records (one per line):</label>
                     <textarea id="dns-records" class="form-control" placeholder="Format: TYPE|NAME|CONTENT&#10;Example: A|@|192.0.2.1&#10;Example: CNAME|www|example.com" rows="8"></textarea>
                     <small class="help-text">
@@ -78,26 +89,76 @@
         <div class="records-container">
             <div class="records-header">
                 <h2><i class="fas fa-table"></i> Current DNS Records</h2>
-                <button id="refresh-records" class="btn btn-accent btn-sm">
-                    <i class="fas fa-sync"></i> Refresh
-                </button>
+                <div class="records-controls">
+                    <div class="form-group">
+                        <input type="text" id="search-records" class="form-control" placeholder="Search DNS records...">
+                    </div>
+                    <div class="form-group">
+                        <select id="type-filter" class="form-control">
+                            <option value="">All Types</option>
+                            <option value="A">A</option>
+                            <option value="AAAA">AAAA</option>
+                            <option value="CNAME">CNAME</option>
+                            <option value="MX">MX</option>
+                            <option value="TXT">TXT</option>
+                            <option value="NS">NS</option>
+                            <option value="SRV">SRV</option>
+                            <option value="CAA">CAA</option>
+                            <option value="PTR">PTR</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <select id="proxied-filter" class="form-control">
+                            <option value="">All Records</option>
+                            <option value="true">Proxied Only</option>
+                            <option value="false">Direct Only</option>
+                        </select>
+                    </div>
+                    <button id="refresh-records" class="btn btn-accent btn-sm">
+                        <i class="fas fa-sync"></i> Refresh
+                    </button>
+                </div>
             </div>
-            <table id="dns-records-table" class="records-table">
-                <thead>
-                    <tr>
-                        <th>Type</th>
-                        <th>Name</th>
-                        <th>Content</th>
-                        <th>Proxied</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td colspan="5">Loading DNS records...</td>
-                    </tr>
-                </tbody>
-            </table>
+            
+            <div class="records-stats">
+                <span id="records-count" class="records-count">Loading...</span>
+                <span id="filtered-count" class="filtered-count hidden"></span>
+            </div>
+            
+            <div class="records-table-container">
+                <table id="dns-records-table" class="records-table">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-sort="type">
+                                Type <i class="fas fa-sort sort-icon"></i>
+                            </th>
+                            <th class="sortable" data-sort="name">
+                                Name <i class="fas fa-sort sort-icon"></i>
+                            </th>
+                            <th class="sortable" data-sort="content">
+                                Content <i class="fas fa-sort sort-icon"></i>
+                            </th>
+                            <th class="sortable" data-sort="proxied">
+                                Proxied <i class="fas fa-sort sort-icon"></i>
+                            </th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="5" class="loading-row">
+                                <i class="fas fa-spinner fa-spin"></i> Loading DNS records...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <div id="no-records-message" class="no-records-message hidden">
+                    <i class="fas fa-search"></i>
+                    <p>No DNS records found matching your search criteria.</p>
+                    <button id="reset-filters" class="btn btn-outline btn-sm">Reset Filters</button>
+                </div>
+            </div>
         </div>
     </div>
     

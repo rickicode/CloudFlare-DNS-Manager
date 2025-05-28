@@ -31,7 +31,7 @@ func main() {
 		Expiration:   30 * 24 * time.Hour, // 30 days
 		CookieSecure: false,               // Set to true in production with HTTPS
 		CookiePath:   "/",
-		CookieName:   "cloudflare_dns_session",
+		KeyLookup:    "cookie:cloudflare_dns_session",
 	})
 
 	// Initialize template engine with embedded files

@@ -12,9 +12,10 @@ import (
 
 // Domain represents a Cloudflare domain
 type Domain struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Status string `json:"status"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Status    string `json:"status"`
+	CreatedOn string `json:"created_on"`
 }
 
 // DomainsHandler handles fetching domains from Cloudflare
@@ -43,10 +44,16 @@ func DomainsHandler(store *session.Store) fiber.Handler {
 		// Convert zones to Domain objects
 		domains := make([]Domain, len(zones))
 		for i, zone := range zones {
+			createdOn := ""
+			if !zone.CreatedOn.IsZero() {
+				createdOn = zone.CreatedOn.Format("2006-01-02T15:04:05Z")
+			}
+
 			domains[i] = Domain{
-				ID:     zone.ID,
-				Name:   zone.Name,
-				Status: zone.Status,
+				ID:        zone.ID,
+				Name:      zone.Name,
+				Status:    zone.Status,
+				CreatedOn: createdOn,
 			}
 		}
 

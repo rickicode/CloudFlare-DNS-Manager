@@ -570,6 +570,7 @@ function initApp() {
     setupDNSForm();
     setupAddDomainsForm();
     setupDNSTemplates();
+    setupModals();
     
     // Check if we're already on a specific page
     const path = window.location.pathname;
@@ -596,6 +597,68 @@ function initApp() {
             }, 800);
         }
     }
+}
+// Setup modal functionality
+function setupModals() {
+    // Edit record modal
+    const editModal = document.getElementById('edit-record-modal');
+    const closeEditBtn = document.getElementById('close-edit-modal');
+    const cancelEditBtn = document.getElementById('cancel-edit');
+    const saveRecordBtn = document.getElementById('save-record');
+    
+    if (closeEditBtn) {
+        closeEditBtn.addEventListener('click', closeModals);
+    }
+    
+    if (cancelEditBtn) {
+        cancelEditBtn.addEventListener('click', closeModals);
+    }
+    
+    if (saveRecordBtn) {
+        saveRecordBtn.addEventListener('click', saveEditedRecord);
+    }
+    
+    // Delete record modal
+    const deleteModal = document.getElementById('delete-record-modal');
+    const closeDeleteBtn = document.getElementById('close-delete-modal');
+    const cancelDeleteBtn = document.getElementById('cancel-delete');
+    const confirmDeleteBtn = document.getElementById('confirm-delete');
+    
+    if (closeDeleteBtn) {
+        closeDeleteBtn.addEventListener('click', closeModals);
+    }
+    
+    if (cancelDeleteBtn) {
+        cancelDeleteBtn.addEventListener('click', closeModals);
+    }
+    
+    if (confirmDeleteBtn) {
+        confirmDeleteBtn.addEventListener('click', deleteRecord);
+    }
+    
+    // Close modals when clicking outside
+    if (editModal) {
+        editModal.addEventListener('click', function(e) {
+            if (e.target === editModal) {
+                closeModals();
+            }
+        });
+    }
+    
+    if (deleteModal) {
+        deleteModal.addEventListener('click', function(e) {
+            if (e.target === deleteModal) {
+                closeModals();
+            }
+        });
+    }
+    
+    // Close modals with Escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeModals();
+        }
+    });
 }
 
 // API Credential Form Setup
@@ -855,51 +918,70 @@ function setupDomainSelect() {
     });
 }
 
+// Global variables for domains management
+let allDomains = [];
+let filteredDomains = [];
+let currentDomainSortField = null;
+let currentDomainSortDirection = 'asc';
+
 // Load Domains
 function loadDomains() {
-    const domainsList = document.getElementById('domains-list');
+    const domainsTable = document.querySelector('#domains-table tbody');
     const domainSelect = document.getElementById('domain-select');
     
-    if (!domainsList && !domainSelect) return;
+    if (!domainsTable && !domainSelect) return;
     
-    // Show loading state
-    if (domainsList) {
-        domainsList.innerHTML = '<p>Loading domains...</p>';
+    // Show loading state for table
+    if (domainsTable) {
+        domainsTable.innerHTML = `
+            <tr>
+                <td colspan="4" class="loading-row">
+                    <i class="fas fa-spinner fa-spin"></i> Loading domains...
+                </td>
+            </tr>
+        `;
     }
     
     // Fetch domains
-    fetch('/api/domains')
-        .then(response => response.json())
+    fetch('/api/domains', {
+        method: 'GET',
+        credentials: 'same-origin', // Include cookies/session
+        headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+        }
+    })
+        .then(response => {
+            // Check if response is ok
+            if (!response.ok) {
+                if (response.status === 401) {
+                    // Unauthorized - redirect to home page
+                    window.location.href = '/';
+                    return;
+                }
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
         .then(data => {
             if (!data.success) {
                 throw new Error(data.message || 'Failed to load domains');
             }
             
-            const domains = data.data || [];
+            allDomains = data.data || [];
+            filteredDomains = [...allDomains];
             
-            // Update domains list if it exists
-            if (domainsList) {
-                if (domains.length === 0) {
-                    domainsList.innerHTML = '<p>No domains found in your account.</p>';
-                } else {
-                    domainsList.innerHTML = '';
-                    domains.forEach(domain => {
-                        const item = document.createElement('div');
-                        item.className = 'domain-item';
-                        item.innerHTML = `
-                            <h3>${domain.name}</h3>
-                            <p>Status: ${domain.status}</p>
-                            <a href="/dns/${domain.name}" class="btn">Manage DNS</a>
-                        `;
-                        domainsList.appendChild(item);
-                    });
-                }
+            // Display domains in table
+            if (domainsTable) {
+                displayDomains();
+                updateDomainsCount();
+                setupDomainSearchAndFilters();
             }
             
             // Update domain select dropdown if it exists
             if (domainSelect) {
                 domainSelect.innerHTML = '<option value="">Select a domain</option>';
-                domains.forEach(domain => {
+                allDomains.forEach(domain => {
                     const option = document.createElement('option');
                     option.value = domain.name;
                     option.textContent = domain.name;
@@ -908,18 +990,201 @@ function loadDomains() {
             }
         })
         .catch(error => {
+            console.error('Error loading domains:', error);
             const errorMsg = `Error loading domains: ${error.message}`;
-            if (domainsList) {
-                domainsList.innerHTML = `<p class="error">${errorMsg}</p>`;
+            if (domainsTable) {
+                domainsTable.innerHTML = `
+                    <tr>
+                        <td colspan="4" class="loading-row" style="color: var(--error-color);">
+                            <i class="fas fa-exclamation-triangle"></i> ${errorMsg}
+                            <br><small>Check browser console for more details</small>
+                        </td>
+                    </tr>
+                `;
             }
             showNotification(errorMsg, 'error');
         });
+}
+
+// Display domains in table format
+function displayDomains() {
+    const domainsTable = document.querySelector('#domains-table tbody');
+    const noDomainsMessage = document.getElementById('no-domains-message');
+    
+    if (!domainsTable) return;
+    
+    if (!filteredDomains || filteredDomains.length === 0) {
+        domainsTable.innerHTML = `
+            <tr>
+                <td colspan="4" class="loading-row">
+                    <i class="fas fa-search"></i> No domains found
+                </td>
+            </tr>
+        `;
+        if (noDomainsMessage) {
+            noDomainsMessage.classList.remove('hidden');
+        }
+        return;
+    }
+    
+    if (noDomainsMessage) {
+        noDomainsMessage.classList.add('hidden');
+    }
+    
+    domainsTable.innerHTML = '';
+    filteredDomains.forEach(domain => {
+        const statusClass = `status-${domain.status.toLowerCase()}`;
+        const createdDate = domain.created_on ? new Date(domain.created_on).toLocaleDateString() : 'Unknown';
+        
+        const row = document.createElement('tr');
+        row.dataset.domainName = domain.name;
+        
+        row.innerHTML = `
+            <td class="domain-name">${escapeHtml(domain.name)}</td>
+            <td>
+                <span class="domain-status ${statusClass}">${domain.status}</span>
+            </td>
+            <td class="domain-created">${createdDate}</td>
+            <td class="domain-actions">
+                <a href="/dns/${domain.name}" class="btn btn-sm" title="Manage DNS">
+                    <i class="fas fa-cog"></i> Manage DNS
+                </a>
+            </td>
+        `;
+        
+        domainsTable.appendChild(row);
+    });
+}
+
+// Setup search and filter functionality for domains
+function setupDomainSearchAndFilters() {
+    const searchInput = document.getElementById('search-domains');
+    const statusFilter = document.getElementById('status-filter');
+    const resetFiltersBtn = document.getElementById('reset-domain-filters');
+    const refreshBtn = document.getElementById('refresh-domains');
+    
+    if (searchInput) {
+        searchInput.addEventListener('input', applyDomainFilters);
+        searchInput.addEventListener('keyup', function(e) {
+            if (e.key === 'Escape') {
+                searchInput.value = '';
+                applyDomainFilters();
+            }
+        });
+    }
+    
+    if (statusFilter) {
+        statusFilter.addEventListener('change', applyDomainFilters);
+    }
+    
+    if (resetFiltersBtn) {
+        resetFiltersBtn.addEventListener('click', function() {
+            if (searchInput) searchInput.value = '';
+            if (statusFilter) statusFilter.value = '';
+            applyDomainFilters();
+        });
+    }
+    
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', function() {
+            loadDomains();
+        });
+    }
+}
+
+// Apply search and filter logic for domains
+function applyDomainFilters() {
+    const searchTerm = document.getElementById('search-domains')?.value.toLowerCase().trim() || '';
+    const statusFilter = document.getElementById('status-filter')?.value || '';
+    
+    filteredDomains = allDomains.filter(domain => {
+        // Search filter
+        const matchesSearch = !searchTerm ||
+            domain.name.toLowerCase().includes(searchTerm) ||
+            domain.status.toLowerCase().includes(searchTerm);
+        
+        // Status filter
+        const matchesStatus = !statusFilter || domain.status.toLowerCase() === statusFilter.toLowerCase();
+        
+        return matchesSearch && matchesStatus;
+    });
+    
+    // Sort domains alphabetically by name
+    filteredDomains.sort((a, b) => a.name.localeCompare(b.name));
+    
+    displayDomains();
+    updateDomainsCount();
+}
+
+
+// Update domains count display
+function updateDomainsCount() {
+    const domainsCountEl = document.getElementById('domains-count');
+    const filteredCountEl = document.getElementById('domains-filtered-count');
+    
+    if (domainsCountEl) {
+        domainsCountEl.textContent = `Total: ${allDomains.length} domains`;
+    }
+    
+    if (filteredCountEl) {
+        if (filteredDomains.length !== allDomains.length) {
+            filteredCountEl.textContent = `Showing: ${filteredDomains.length} domains`;
+            filteredCountEl.classList.remove('hidden');
+        } else {
+            filteredCountEl.classList.add('hidden');
+        }
+    }
 }
 
 // DNS Form Setup
 function setupDNSForm() {
     const dnsForm = document.getElementById('dns-form');
     if (!dnsForm) return;
+
+    // Load DNS records on page load
+    const domain = document.getElementById('domain-name')?.value;
+    if (domain) {
+        loadDNSRecords(domain);
+    }
+    
+    // Setup DNS template selector for DNS page
+    const dnsTemplateSelect = document.getElementById('dns-template-select-dns');
+    if (dnsTemplateSelect) {
+        dnsTemplateSelect.addEventListener('change', function() {
+            const templateId = this.value;
+            const dnsRecordsTextarea = document.getElementById('dns-records');
+            
+            if (!templateId || !dnsRecordsTextarea) {
+                return;
+            }
+            
+            // Get template records
+            const templateRecords = getDNSTemplateRecords(templateId);
+            if (templateRecords && templateRecords.length > 0) {
+                // Fill textarea with template records
+                dnsRecordsTextarea.value = templateRecords.join('\n');
+                showNotification('Template loaded successfully!', 'success');
+            }
+        });
+    }
+    
+    // Refresh records button
+    const refreshBtn = document.getElementById('refresh-records');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', function() {
+            const domain = document.getElementById('domain-name')?.value;
+            if (domain) {
+                refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+                refreshBtn.disabled = true;
+                
+                setTimeout(() => {
+                    loadDNSRecords(domain);
+                    refreshBtn.innerHTML = '<i class="fas fa-sync"></i> Refresh';
+                    refreshBtn.disabled = false;
+                }, 500);
+            }
+        });
+    }
 
     dnsForm.addEventListener('submit', function(e) {
         e.preventDefault();
@@ -974,66 +1239,258 @@ function setupDNSForm() {
 }
 
 // Load DNS Records
+// Global variables for DNS records management
+let allDNSRecords = [];
+let filteredDNSRecords = [];
+let currentSortField = null;
+let currentSortDirection = 'asc';
+
 function loadDNSRecords(domain) {
-    const recordsContainer = document.getElementById('dns-records-display');
-    if (!recordsContainer) return;
+    const tableBody = document.querySelector('#dns-records-table tbody');
+    if (!tableBody) return;
     
-    recordsContainer.innerHTML = '<p>Loading DNS records...</p>';
+    // Show loading state
+    tableBody.innerHTML = `
+        <tr>
+            <td colspan="5" class="loading-row">
+                <i class="fas fa-spinner fa-spin"></i> Loading DNS records...
+            </td>
+        </tr>
+    `;
     
     fetch(`/api/dns/${domain}`)
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                displayDNSRecords(data.data);
+                allDNSRecords = data.data || [];
+                filteredDNSRecords = [...allDNSRecords];
+                displayDNSRecords();
+                updateRecordsCount();
+                setupSearchAndFilters();
             } else {
                 throw new Error(data.message || 'Failed to load DNS records');
             }
         })
         .catch(error => {
-            recordsContainer.innerHTML = `<p class="error">Error loading DNS records: ${error.message}</p>`;
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="5" class="loading-row" style="color: var(--error-color);">
+                        <i class="fas fa-exclamation-triangle"></i> Error loading DNS records: ${error.message}
+                    </td>
+                </tr>
+            `;
             showNotification(`Error loading DNS records: ${error.message}`, 'error');
         });
 }
 
-// Display DNS Records
-function displayDNSRecords(records) {
-    const container = document.getElementById('dns-records-display');
-    if (!container) return;
+// Enhanced DNS Records Display with search and filter support
+function displayDNSRecords() {
+    const tableBody = document.querySelector('#dns-records-table tbody');
+    const noRecordsMessage = document.getElementById('no-records-message');
     
-    if (!records || records.length === 0) {
-        container.innerHTML = '<p>No DNS records found for this domain.</p>';
+    if (!tableBody) return;
+    
+    if (!filteredDNSRecords || filteredDNSRecords.length === 0) {
+        tableBody.innerHTML = '';
+        if (noRecordsMessage) {
+            noRecordsMessage.classList.remove('hidden');
+        }
         return;
     }
     
-    let html = `
-        <div class="records-header">
-            <div class="record-type">Type</div>
-            <div class="record-name">Name</div>
-            <div class="record-content">Content</div>
-            <div class="record-actions">Actions</div>
-        </div>
-    `;
+    if (noRecordsMessage) {
+        noRecordsMessage.classList.add('hidden');
+    }
     
-    records.forEach(record => {
-        const proxiedIcon = record.proxied ? '<i class="fas fa-shield-alt" title="Proxied"></i>' : '';
+    let html = '';
+    filteredDNSRecords.forEach(record => {
+        const typeClass = `type-${record.type.toLowerCase()}`;
+        const proxiedStatus = record.proxied ?
+            '<span class="proxied-status proxied"><i class="fas fa-shield-alt"></i> Proxied</span>' :
+            '<span class="proxied-status direct"><i class="fas fa-globe"></i> Direct</span>';
+        
         html += `
-            <div class="record-row">
-                <div class="record-type">${record.type}</div>
-                <div class="record-name">${record.name}</div>
-                <div class="record-content">${record.content} ${proxiedIcon}</div>
-                <div class="record-actions">
-                    <button class="btn-icon" onclick="editRecord('${record.id}', '${record.type}', '${record.name}', '${record.content}', ${record.proxied})">
+            <tr data-record-id="${record.id}">
+                <td>
+                    <span class="record-type-badge ${typeClass}">${record.type}</span>
+                </td>
+                <td class="record-name">${escapeHtml(record.name)}</td>
+                <td class="record-content">${escapeHtml(record.content)}</td>
+                <td>${proxiedStatus}</td>
+                <td class="record-actions">
+                    <button class="btn-icon btn-edit" onclick="editRecord('${record.id}', '${escapeHtml(record.type)}', '${escapeHtml(record.name)}', '${escapeHtml(record.content)}', ${record.proxied})" title="Edit Record">
                         <i class="fas fa-edit"></i>
                     </button>
-                    <button class="btn-icon" onclick="deleteRecord('${record.id}')">
+                    <button class="btn-icon btn-delete" onclick="confirmDeleteRecord('${record.id}', '${escapeHtml(record.type)}', '${escapeHtml(record.name)}', '${escapeHtml(record.content)}')" title="Delete Record">
                         <i class="fas fa-trash"></i>
                     </button>
-                </div>
-            </div>
+                </td>
+            </tr>
         `;
     });
     
-    container.innerHTML = html;
+    tableBody.innerHTML = html;
+}
+
+// Setup search and filter functionality
+function setupSearchAndFilters() {
+    const searchInput = document.getElementById('search-records');
+    const typeFilter = document.getElementById('type-filter');
+    const proxiedFilter = document.getElementById('proxied-filter');
+    const resetFiltersBtn = document.getElementById('reset-filters');
+    
+    if (searchInput) {
+        searchInput.addEventListener('input', applyFilters);
+        searchInput.addEventListener('keyup', function(e) {
+            if (e.key === 'Escape') {
+                searchInput.value = '';
+                applyFilters();
+            }
+        });
+    }
+    
+    if (typeFilter) {
+        typeFilter.addEventListener('change', applyFilters);
+    }
+    
+    if (proxiedFilter) {
+        proxiedFilter.addEventListener('change', applyFilters);
+    }
+    
+    if (resetFiltersBtn) {
+        resetFiltersBtn.addEventListener('click', function() {
+            if (searchInput) searchInput.value = '';
+            if (typeFilter) typeFilter.value = '';
+            if (proxiedFilter) proxiedFilter.value = '';
+            applyFilters();
+        });
+    }
+    
+    // Setup table sorting
+    setupTableSorting();
+}
+
+// Apply search and filter logic
+function applyFilters() {
+    const searchTerm = document.getElementById('search-records')?.value.toLowerCase().trim() || '';
+    const typeFilter = document.getElementById('type-filter')?.value || '';
+    const proxiedFilter = document.getElementById('proxied-filter')?.value || '';
+    
+    filteredDNSRecords = allDNSRecords.filter(record => {
+        // Search filter
+        const matchesSearch = !searchTerm ||
+            record.type.toLowerCase().includes(searchTerm) ||
+            record.name.toLowerCase().includes(searchTerm) ||
+            record.content.toLowerCase().includes(searchTerm);
+        
+        // Type filter
+        const matchesType = !typeFilter || record.type === typeFilter;
+        
+        // Proxied filter
+        const matchesProxied = !proxiedFilter ||
+            (proxiedFilter === 'true' && record.proxied) ||
+            (proxiedFilter === 'false' && !record.proxied);
+        
+        return matchesSearch && matchesType && matchesProxied;
+    });
+    
+    // Reapply current sorting
+    if (currentSortField) {
+        sortRecords(currentSortField, currentSortDirection);
+    }
+    
+    displayDNSRecords();
+    updateRecordsCount();
+}
+
+// Setup table sorting functionality
+function setupTableSorting() {
+    const sortableHeaders = document.querySelectorAll('.records-table th.sortable');
+    
+    sortableHeaders.forEach(header => {
+        header.addEventListener('click', function() {
+            const sortField = this.getAttribute('data-sort');
+            
+            // Toggle sort direction if clicking the same column
+            if (currentSortField === sortField) {
+                currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSortField = sortField;
+                currentSortDirection = 'asc';
+            }
+            
+            // Update header classes
+            sortableHeaders.forEach(h => {
+                h.classList.remove('sorted-asc', 'sorted-desc');
+            });
+            this.classList.add(`sorted-${currentSortDirection}`);
+            
+            sortRecords(sortField, currentSortDirection);
+            displayDNSRecords();
+        });
+    });
+}
+
+// Sort records by field and direction
+function sortRecords(field, direction) {
+    filteredDNSRecords.sort((a, b) => {
+        let aVal = a[field] || '';
+        let bVal = b[field] || '';
+        
+        // Handle special cases
+        if (field === 'proxied') {
+            aVal = a[field] ? 'true' : 'false';
+            bVal = b[field] ? 'true' : 'false';
+        } else {
+            aVal = aVal.toString().toLowerCase();
+            bVal = bVal.toString().toLowerCase();
+        }
+        
+        if (direction === 'asc') {
+            return aVal.localeCompare(bVal);
+        } else {
+            return bVal.localeCompare(aVal);
+        }
+    });
+}
+
+// Update records count display
+function updateRecordsCount() {
+    const recordsCountEl = document.getElementById('records-count');
+    const filteredCountEl = document.getElementById('filtered-count');
+    
+    if (recordsCountEl) {
+        recordsCountEl.textContent = `Total: ${allDNSRecords.length} records`;
+    }
+    
+    if (filteredCountEl) {
+        if (filteredDNSRecords.length !== allDNSRecords.length) {
+            filteredCountEl.textContent = `Showing: ${filteredDNSRecords.length} records`;
+            filteredCountEl.classList.remove('hidden');
+        } else {
+            filteredCountEl.classList.add('hidden');
+        }
+    }
+}
+
+// Enhanced delete confirmation
+function confirmDeleteRecord(recordId, recordType, recordName, recordContent) {
+    const modal = document.getElementById('delete-record-modal');
+    const detailsEl = document.getElementById('delete-record-details');
+    const recordIdInput = document.getElementById('delete-record-id');
+    
+    if (modal && detailsEl && recordIdInput) {
+        detailsEl.textContent = `${recordType} | ${recordName} | ${recordContent}`;
+        recordIdInput.value = recordId;
+        modal.classList.add('active');
+    }
+}
+
+// Utility function to escape HTML
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 // Modal management functions
@@ -1056,7 +1513,7 @@ function editRecord(recordId, recordType, recordName, recordContent, proxied) {
     document.getElementById('edit-record-proxied').checked = proxied;
     
     // Show edit modal
-    document.getElementById('edit-modal').classList.add('active');
+    document.getElementById('edit-record-modal').classList.add('active');
 }
 
 // Save edited record

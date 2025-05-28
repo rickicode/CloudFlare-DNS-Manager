@@ -12,10 +12,13 @@
   --success-color: #28a745;
   --error-color: #dc3545;
   --warning-color: #ffc107;
+  --info-color: #17a2b8;
   --card-bg: #ffffff;
   --box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --box-shadow-strong: 0 4px 12px rgba(0, 0, 0, 0.15);
   --transition: all 0.2s ease-in-out;
   --border-radius: 4px;
+  --search-bg: #f8f9fa;
 }
 
 * {
@@ -273,8 +276,36 @@ textarea.form-control {
   justify-content: center;
   width: 32px;
   height: 32px;
-  padding: 0;
-  border-radius: 50%;
+  padding: 6px;
+  border: none;
+  border-radius: var(--border-radius);
+  background-color: var(--primary-color);
+  color: white;
+  cursor: pointer;
+  transition: var(--transition);
+  margin: 0 2px;
+}
+
+.btn-icon:hover {
+  background-color: var(--primary-dark);
+  transform: translateY(-1px);
+  box-shadow: var(--box-shadow);
+}
+
+.btn-icon.btn-edit {
+  background-color: var(--info-color);
+}
+
+.btn-icon.btn-edit:hover {
+  background-color: #138496;
+}
+
+.btn-icon.btn-delete {
+  background-color: var(--error-color);
+}
+
+.btn-icon.btn-delete:hover {
+  background-color: #c82333;
 }
 
 /* Notification styles */
@@ -937,4 +968,449 @@ textarea.form-control {
   .records-table td:nth-child(3) {
     display: none; /* Hide content column on mobile */
   }
+/* Search and Filter Styles */
+.records-controls {
+  display: flex;
+  gap: 15px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.records-controls .form-group {
+  margin-bottom: 0;
+  flex: 1;
+  min-width: 200px;
+}
+
+.records-controls .btn {
+  margin-bottom: 0;
+  align-self: flex-end;
+}
+
+/* Records Stats */
+.records-stats {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  margin-bottom: 15px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.records-count {
+  font-size: 14px;
+  color: var(--text-light);
+  font-weight: 500;
+}
+
+.filtered-count {
+  font-size: 14px;
+  color: var(--info-color);
+  font-weight: 500;
+}
+
+.filtered-count.hidden {
+  display: none;
+}
+
+/* Enhanced Table Styles */
+.records-table-container {
+  background-color: var(--card-bg);
+  border-radius: var(--border-radius);
+  overflow: hidden;
+  box-shadow: var(--box-shadow);
+}
+
+.records-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
+}
+
+.records-table th {
+  background-color: var(--search-bg);
+  font-weight: 600;
+  text-align: left;
+  padding: 15px 12px;
+  border-bottom: 2px solid var(--border-color);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.records-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: var(--transition);
+}
+
+.records-table th.sortable:hover {
+  background-color: var(--border-color);
+}
+
+.sort-icon {
+  margin-left: 5px;
+  font-size: 12px;
+  color: var(--text-light);
+  transition: var(--transition);
+}
+
+.records-table th.sorted-asc .sort-icon {
+  color: var(--primary-color);
+  transform: rotate(0deg);
+}
+
+.records-table th.sorted-desc .sort-icon {
+  color: var(--primary-color);
+  transform: rotate(180deg);
+}
+
+.records-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+.record-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-start;
+}
+}
+
+.records-table tr {
+  transition: var(--transition);
+}
+
+.records-table tr:hover {
+  background-color: rgba(0, 153, 255, 0.02);
+}
+
+.records-table tr.hidden {
+  display: none;
+}
+
+.loading-row {
+  text-align: center;
+  padding: 40px 12px;
+  color: var(--text-light);
+  font-style: italic;
+}
+
+.loading-row i {
+  margin-right: 8px;
+}
+
+/* Record Type Badges */
+.record-type-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.record-type-badge.type-a {
+  background-color: rgba(40, 167, 69, 0.1);
+  color: var(--success-color);
+}
+
+.record-type-badge.type-aaaa {
+  background-color: rgba(40, 167, 69, 0.15);
+  color: var(--success-color);
+}
+
+.record-type-badge.type-cname {
+  background-color: rgba(0, 153, 255, 0.1);
+  color: var(--primary-color);
+}
+
+.record-type-badge.type-mx {
+  background-color: rgba(255, 193, 7, 0.1);
+  color: #856404;
+}
+
+.record-type-badge.type-txt {
+  background-color: rgba(108, 117, 125, 0.1);
+  color: var(--accent-color);
+}
+
+.record-type-badge.type-ns {
+  background-color: rgba(220, 53, 69, 0.1);
+  color: var(--error-color);
+}
+
+.record-type-badge.type-srv,
+.record-type-badge.type-caa,
+.record-type-badge.type-ptr {
+  background-color: rgba(23, 162, 184, 0.1);
+  color: var(--info-color);
+}
+
+/* Proxied Status */
+.proxied-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+}
+
+.proxied-status.proxied {
+  color: var(--success-color);
+}
+
+.proxied-status.direct {
+  color: var(--text-light);
+}
+
+.proxied-status i {
+  font-size: 16px;
+}
+
+/* No Records Message */
+.no-records-message {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-light);
+}
+
+.no-records-message.hidden {
+  display: none;
+}
+
+.no-records-message i {
+  font-size: 48px;
+  margin-bottom: 20px;
+  opacity: 0.5;
+}
+
+.no-records-message p {
+  font-size: 16px;
+  margin-bottom: 20px;
+}
+
+/* Responsive Updates for Search */
+@media (max-width: 768px) {
+  .records-controls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .search-container {
+    min-width: auto;
+    max-width: none;
+  }
+
+  .filter-container {
+    justify-content: space-between;
+  }
+
+  .filter-select {
+    flex: 1;
+    min-width: auto;
+  }
+
+  .records-stats {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+
+  .records-table {
+    font-size: 14px;
+  }
+
+  .records-table th,
+  .records-table td {
+    padding: 10px 8px;
+  }
+
+/* Domains Page Styles */
+.domains-header {
+  margin-bottom: 20px;
+}
+
+.domains-controls {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.domains-controls .form-group {
+  margin-bottom: 0;
+  flex: 1;
+  min-width: 200px;
+}
+
+.domains-stats {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  margin-bottom: 15px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 14px;
+  color: var(--text-light);
+}
+
+.domains-count {
+  font-weight: 500;
+}
+
+.domains-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.domain-item {
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: 20px;
+  transition: var(--transition);
+  position: relative;
+}
+
+.domain-item:hover {
+  border-color: var(--primary-light);
+  box-shadow: var(--box-shadow);
+  transform: translateY(-2px);
+}
+
+.domain-item.hidden {
+  display: none;
+}
+
+.domain-item h3 {
+  margin: 0 0 10px 0;
+  color: var(--primary-color);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.domain-status {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 15px;
+}
+
+.domain-status.status-active {
+  background-color: rgba(40, 167, 69, 0.1);
+  color: var(--success-color);
+}
+
+.domain-status.status-pending {
+  background-color: rgba(255, 193, 7, 0.1);
+  color: #856404;
+}
+
+.domain-status.status-initializing {
+  background-color: rgba(23, 162, 184, 0.1);
+  color: var(--info-color);
+}
+
+.domain-status.status-moved {
+  background-color: rgba(108, 117, 125, 0.1);
+  color: var(--accent-color);
+}
+
+.domain-status.status-deleted {
+  background-color: rgba(220, 53, 69, 0.1);
+  color: var(--error-color);
+}
+
+.domain-created {
+  color: var(--text-light);
+  font-size: 13px;
+  margin-bottom: 15px;
+}
+
+.domain-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.domain-actions .btn {
+  flex: 1;
+  text-align: center;
+}
+
+.no-domains-message {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-light);
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  margin-top: 20px;
+}
+
+.no-domains-message.hidden {
+  display: none;
+}
+
+.no-domains-message i {
+  font-size: 48px;
+  margin-bottom: 20px;
+  opacity: 0.5;
+}
+
+.no-domains-message p {
+  font-size: 16px;
+  margin-bottom: 20px;
+}
+
+/* Responsive for domains page */
+@media (max-width: 768px) {
+  .domains-controls {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .domains-controls .form-group {
+    min-width: auto;
+  }
+
+  .domains-list {
+    grid-template-columns: 1fr;
+  }
+
+  .domains-stats {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+
+  .no-domains-message {
+    padding: 40px 20px;
+  }
+
+  .no-domains-message i {
+    font-size: 36px;
+  }
+}
+  .records-table th:nth-child(3),
+  .records-table td:nth-child(3) {
+    display: none; /* Hide content column on mobile */
+  }
+
+  .no-records-message {
+    padding: 40px 20px;
+  }
+
+  .no-records-message i {
+    font-size: 36px;
+  }
+}
 }
