@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cloudflare DNS Manager - {{ .Domain }}</title>
+    <link rel="icon" type="image/png" href="https://cdn.netq.me/cloudflare.256x256.png">
     <link rel="stylesheet" href="/static/css/styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -15,6 +16,11 @@
                 <a href="/domains" class="btn btn-outline">
                     <i class="fas fa-arrow-left"></i> Back to Domains
                 </a>
+                {{if .Email}}
+                <span class="user-email">
+                    <i class="fas fa-user"></i> {{.Email}}
+                </span>
+                {{end}}
                 <a href="/logout" class="btn btn-logout">
                     <i class="fas fa-sign-out-alt"></i> Logout
                 </a>
@@ -119,6 +125,9 @@
                 <button id="refresh-records" class="btn btn-accent btn-sm">
                     <i class="fas fa-sync"></i> Refresh
                 </button>
+                <button id="bulk-delete-records" class="btn btn-danger btn-sm" style="display: none;">
+                    <i class="fas fa-trash-alt"></i> Delete Selected
+                </button>
             </div>
             
             <div class="records-stats">
@@ -130,6 +139,9 @@
                 <table id="dns-records-table" class="records-table">
                     <thead>
                         <tr>
+                            <th>
+                                <input type="checkbox" id="select-all-records" title="Select/Deselect All">
+                            </th>
                             <th class="sortable" data-sort="type">
                                 Type <i class="fas fa-sort sort-icon"></i>
                             </th>
@@ -147,7 +159,7 @@
                     </thead>
                     <tbody>
                         <tr>
-                            <td colspan="5" class="loading-row">
+                            <td colspan="6" class="loading-row">
                                 <i class="fas fa-spinner fa-spin"></i> Loading DNS records...
                             </td>
                         </tr>
@@ -159,6 +171,11 @@
                     <p>No DNS records found matching your search criteria.</p>
                     <button id="reset-filters" class="btn btn-outline btn-sm">Reset Filters</button>
                 </div>
+            </div>
+            
+            <!-- Pagination for DNS Records -->
+            <div class="pagination-container" id="dns-records-pagination">
+                <!-- Pagination will be inserted here -->
             </div>
         </div>
     </div>

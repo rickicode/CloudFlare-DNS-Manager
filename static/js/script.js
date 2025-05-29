@@ -328,11 +328,11 @@ function showTestCredentialButton() {
         testBtn.type = 'button';
         testBtn.id = 'test-stored-credentials';
         testBtn.className = 'btn btn-success';
-        testBtn.innerHTML = '<i class="fas fa-check-circle"></i> Test API Credential';
+        testBtn.innerHTML = '<i class="fas fa-check-circle"></i> Test API Credentials';
         formActions.appendChild(testBtn);
         
         // Add event listener for test button
-        testBtn.addEventListener('click', testStoredCredentials);
+        testBtn.addEventListener('click', testCurrentCredentials);
     }
     
     // Add "Manage Saved Credentials" button
@@ -373,11 +373,22 @@ function hideTestCredentialButton() {
     if (manageBtn) manageBtn.remove();
 }
 
-// Test stored credentials
-function testStoredCredentials() {
-    const credentials = loadCredentials();
-    if (!credentials) {
-        showNotification('No stored credentials found', 'error');
+// Test current form credentials
+function testCurrentCredentials() {
+    // Get credentials from the form (current input)
+    const emailField = document.getElementById('email');
+    const apiKeyField = document.getElementById('api-key');
+    
+    if (!emailField || !apiKeyField) {
+        showNotification('Form fields not found', 'error');
+        return;
+    }
+    
+    const email = emailField.value.trim();
+    const apiKey = apiKeyField.value.trim();
+    
+    if (!email || !apiKey) {
+        showNotification('Please enter both email and API key', 'error');
         return;
     }
     
@@ -386,29 +397,47 @@ function testStoredCredentials() {
     testBtn.disabled = true;
     testBtn.textContent = 'Testing...';
     
-    // Send validation request with stored credentials
+    // Send validation request with current form credentials
     fetch('/validate-api', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
-            email: credentials.email, 
-            apiKey: credentials.apiKey 
+        body: JSON.stringify({
+            email: email,
+            apiKey: apiKey
         }),
     })
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            showNotification('Stored credentials validated successfully!', 'success');
+            // Check if user wants to save credentials
+            const saveCredentialsCheckbox = document.getElementById('save-credentials');
+            const shouldSave = saveCredentialsCheckbox && saveCredentialsCheckbox.checked;
+            
+            if (shouldSave) {
+                const saved = saveCredentials(email, apiKey);
+                if (saved) {
+                    showNotification('API credentials validated and saved successfully!', 'success');
+                } else {
+                    showNotification('API credentials validated successfully! (Note: Failed to save for future use)', 'success');
+                }
+            } else {
+                showNotification('API credentials validated successfully!', 'success');
+            }
+            
             setTimeout(() => {
                 window.location.href = '/domains';
             }, 1000);
         } else {
             showNotification(`Error: ${data.message || 'Invalid stored credentials'}`, 'error');
-            // Clear invalid credentials
-            clearCredentials();
-            hideTestCredentialButton();
+            // Clear invalid credentials for the specific email
+            clearCredentials(email);
+            
+            // Check if there are any remaining credentials
+            if (!hasStoredCredentials()) {
+                hideTestCredentialButton();
+            }
         }
     })
     .catch(error => {
@@ -669,7 +698,11 @@ function initApp() {
         loadDNSRecords(domain);
     } else if (path === '/domains') {
         // We're on the domains page
-        loadDomains();
+        // Setup search functionality
+        setupDomainSearchWithPagination();
+        
+        // Load domains for table with pagination (20 per page)
+        loadDomains(1, '', false);
     } else if (path === '/') {
         // We're on the home page, check for stored credentials
         checkAndLoadStoredCredentials();
@@ -994,17 +1027,284 @@ function displayAddDomainsResults(results) {
     resultsSection.classList.remove('hidden');
 }
 
-// Domain Selection Setup
+// Domain Selection Setup - Modal with Pagination
 function setupDomainSelect() {
-    const domainSelect = document.getElementById('domain-select');
-    if (!domainSelect) return;
+    const openModalBtn = document.getElementById('open-domain-modal');
+    const modal = document.getElementById('domain-selection-modal');
+    const closeModalBtn = document.getElementById('close-domain-modal');
+    const modalSearch = document.getElementById('modal-domain-search');
+    const modalDomainsList = document.getElementById('modal-domains-list');
+    const modalPagination = document.getElementById('modal-pagination');
+    const selectedDomainInput = document.getElementById('selected-domain');
+    const selectedDomainText = document.querySelector('.selected-domain-text');
     
-    domainSelect.addEventListener('change', function() {
-        const domain = this.value;
-        if (domain) {
-            window.location.href = `/dns/${domain}`;
+    if (!openModalBtn || !modal) return;
+    
+    let currentPage = 1;
+    let currentSearch = '';
+    let totalPages = 1;
+    
+    // Preload modal data when page loads
+    loadModalDomains(1, '');
+    
+    // Open modal
+    openModalBtn.addEventListener('click', function() {
+        modal.classList.add('active');
+        // Focus on search field and select all text if there's existing search
+        if (modalSearch) {
+            modalSearch.focus();
+            if (modalSearch.value) {
+                modalSearch.select();
+            }
         }
     });
+    
+    // Close modal
+    closeModalBtn?.addEventListener('click', closeModal);
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) closeModal();
+    });
+    
+    // Search functionality
+    let searchTimeout;
+    modalSearch?.addEventListener('input', function() {
+        const searchTerm = this.value.trim();
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            currentSearch = searchTerm;
+            loadModalDomains(1, searchTerm);
+        }, 300);
+    });
+    
+    // ESC key to close
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && modal.classList.contains('active')) {
+            closeModal();
+        }
+    });
+    
+    function closeModal() {
+        modal.classList.remove('active');
+        // Don't reset search and page when closing modal
+        // This preserves the user's search state
+    }
+    
+    function loadModalDomains(page = 1, search = '') {
+        if (!modalDomainsList) return;
+        
+        modalDomainsList.innerHTML = `
+            <tr>
+                <td colspan="3" class="loading-row">
+                    <i class="fas fa-spinner fa-spin"></i> Loading domains...
+                </td>
+            </tr>
+        `;
+        
+        // Build URL with pagination - use 50 per page for modal to test scrolling
+        let url = `/api/domains?page=${page}&per_page=10`;
+        if (search) {
+            url += `&search=${encodeURIComponent(search)}`;
+        }
+        
+        // Use session-based authentication like the main domains table
+        fetch(url, {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                if (response.status === 401) {
+                    modalDomainsList.innerHTML = `
+                        <tr>
+                            <td colspan="3" class="loading-row" style="color: var(--error-color);">
+                                <i class="fas fa-exclamation-triangle"></i> Authentication required. Please refresh and configure API credentials.
+                            </td>
+                        </tr>
+                    `;
+                    return;
+                }
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!data) return;
+            
+            if (!data.success) {
+                throw new Error(data.message || 'Failed to load domains');
+            }
+            
+            // Use the correct data structure
+            const domains = data.data || [];
+            const pagination = data.pagination || {};
+            
+            console.log('Modal API Response:', data); // Debug log
+            console.log('Domains array:', domains); // Debug log
+            
+            displayModalDomains(domains);
+            displayModalPagination(pagination);
+            currentPage = page;
+        })
+        .catch(error => {
+            console.error('Error loading domains:', error);
+            modalDomainsList.innerHTML = `
+                <tr>
+                    <td colspan="3" class="loading-row" style="color: var(--error-color);">
+                        <i class="fas fa-exclamation-triangle"></i> ${error.message}
+                    </td>
+                </tr>
+            `;
+        });
+    }
+    
+    function displayModalDomains(domains) {
+        if (!modalDomainsList) return;
+        
+        if (domains.length === 0) {
+            modalDomainsList.innerHTML = `
+                <tr>
+                    <td colspan="3" class="loading-row">
+                        <i class="fas fa-search"></i> No domains found
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        modalDomainsList.innerHTML = '';
+        
+        domains.forEach(domain => {
+            // Ensure we have the domain object structure
+            const domainName = domain.name || domain.Name || 'Unknown Domain';
+            const domainStatus = domain.status || domain.Status || 'unknown';
+            
+            const row = document.createElement('tr');
+            row.className = 'records-row';
+            
+            row.innerHTML = `
+                <td class="record-name">${escapeHtml(domainName)}</td>
+                <td class="record-type">
+                    <span class="status-badge status-${domainStatus.toLowerCase()}">${domainStatus.toUpperCase()}</span>
+                </td>
+                <td class="record-actions">
+                    <button class="btn btn-sm btn-primary select-domain-btn" data-domain="${escapeHtml(domainName)}">
+                        <i class="fas fa-arrow-right"></i> Select
+                    </button>
+                </td>
+            `;
+            
+            // Add click event to the select button
+            const selectBtn = row.querySelector('.select-domain-btn');
+            selectBtn.addEventListener('click', function() {
+                selectDomain(domainName);
+            });
+            
+            // Add click event to the entire row for better UX
+            row.addEventListener('click', function(e) {
+                if (!e.target.closest('.select-domain-btn')) {
+                    selectDomain(domainName);
+                }
+            });
+            
+            modalDomainsList.appendChild(row);
+        });
+        
+        console.log('Displayed domains:', domains); // Debug log
+    }
+    
+    function displayModalPagination(pagination) {
+        if (!modalPagination) return;
+        
+        const { page = 1, per_page = 20, total_count = 0, total_pages = 1 } = pagination;
+        
+        if (total_pages <= 1) {
+            modalPagination.innerHTML = '';
+            return;
+        }
+        
+        let paginationHTML = '<div class="pagination-info">';
+        paginationHTML += `<span>Page ${page} of ${total_pages} (${total_count} domains)</span>`;
+        paginationHTML += '</div>';
+        
+        paginationHTML += '<div class="pagination-controls">';
+        
+        // Previous button
+        if (page > 1) {
+            paginationHTML += `<button class="btn btn-outline btn-sm" onclick="loadModalDomainsPage(${page - 1})">
+                <i class="fas fa-chevron-left"></i> Previous
+            </button>`;
+        }
+        
+        // Page numbers
+        const maxPageLinks = 5;
+        let startPage = Math.max(1, page - Math.floor(maxPageLinks / 2));
+        let endPage = Math.min(total_pages, startPage + maxPageLinks - 1);
+        
+        if (endPage - startPage + 1 < maxPageLinks) {
+            startPage = Math.max(1, endPage - maxPageLinks + 1);
+        }
+        
+        if (startPage > 1) {
+            paginationHTML += `<button class="btn btn-outline btn-sm" onclick="loadModalDomainsPage(1)">1</button>`;
+            if (startPage > 2) {
+                paginationHTML += '<span class="pagination-dots">...</span>';
+            }
+        }
+        
+        for (let i = startPage; i <= endPage; i++) {
+            const isActive = i === page ? ' active' : '';
+            paginationHTML += `<button class="btn btn-outline btn-sm${isActive}" onclick="loadModalDomainsPage(${i})">${i}</button>`;
+        }
+        
+        if (endPage < total_pages) {
+            if (endPage < total_pages - 1) {
+                paginationHTML += '<span class="pagination-dots">...</span>';
+            }
+            paginationHTML += `<button class="btn btn-outline btn-sm" onclick="loadModalDomainsPage(${total_pages})">${total_pages}</button>`;
+        }
+        
+        // Next button
+        if (page < total_pages) {
+            paginationHTML += `<button class="btn btn-outline btn-sm" onclick="loadModalDomainsPage(${page + 1})">
+                Next <i class="fas fa-chevron-right"></i>
+            </button>`;
+        }
+        
+        paginationHTML += '</div>';
+        modalPagination.innerHTML = paginationHTML;
+    }
+    
+    function selectDomain(domainName) {
+        // Update the hidden input
+        if (selectedDomainInput) {
+            selectedDomainInput.value = domainName;
+        }
+        
+        // Update the button text
+        if (selectedDomainText) {
+            selectedDomainText.textContent = domainName;
+            selectedDomainText.classList.add('has-value');
+        }
+        
+        // Close modal
+        closeModal();
+        
+        // Navigate to DNS management page
+        window.location.href = `/dns/${domainName}`;
+    }
+    
+    // Make functions available globally
+    window.loadModalDomainsPage = function(page) {
+        loadModalDomains(page, currentSearch);
+    };
+    
+    window.refreshModalDomains = function() {
+        loadModalDomains(currentPage, currentSearch);
+    };
 }
 
 // Global variables for domains management
@@ -1013,12 +1313,16 @@ let filteredDomains = [];
 let currentDomainSortField = null;
 let currentDomainSortDirection = 'asc';
 
-// Load Domains
-function loadDomains() {
+// Load Domains with pagination
+function loadDomains(page = 1, search = '', loadAll = false) {
     const domainsTable = document.querySelector('#domains-table tbody');
     const domainSelect = document.getElementById('domain-select');
+    const domainSearchInput = document.getElementById('domain-search');
     
-    if (!domainsTable && !domainSelect) return;
+    if (!domainsTable && !domainSelect && !domainSearchInput) return;
+    
+    // Use 20 per page as requested to match Cloudflare's default
+    const perPage = 20;
     
     // Show loading state for table
     if (domainsTable) {
@@ -1031,8 +1335,18 @@ function loadDomains() {
         `;
     }
     
+    // Build query parameters
+    const queryParams = new URLSearchParams({
+        page: page.toString(),
+        per_page: perPage.toString()
+    });
+    
+    if (search) {
+        queryParams.append('search', search);
+    }
+    
     // Fetch domains
-    fetch('/api/domains', {
+    fetch(`/api/domains?${queryParams.toString()}`, {
         method: 'GET',
         credentials: 'same-origin', // Include cookies/session
         headers: {
@@ -1057,26 +1371,22 @@ function loadDomains() {
                 throw new Error(data.message || 'Failed to load domains');
             }
             
-            allDomains = data.data || [];
-            filteredDomains = [...allDomains];
+            const domains = data.data || [];
+            const pagination = data.pagination || {};
             
-            // Display domains in table
-            if (domainsTable) {
+            // For table display (paginated)
+            if (domainsTable && !loadAll) {
+                allDomains = domains;
+                filteredDomains = [...allDomains];
                 displayDomains();
                 updateDomainsCount();
                 setupDomainSearchAndFilters();
+                
+                // Display pagination controls
+                displayPaginationControls(pagination, page, search);
             }
             
-            // Update domain select dropdown if it exists
-            if (domainSelect) {
-                domainSelect.innerHTML = '<option value="">Select a domain</option>';
-                allDomains.forEach(domain => {
-                    const option = document.createElement('option');
-                    option.value = domain.name;
-                    option.textContent = domain.name;
-                    domainSelect.appendChild(option);
-                });
-            }
+            // Table view only - modal handles its own domain loading
         })
         .catch(error => {
             console.error('Error loading domains:', error);
@@ -1091,6 +1401,18 @@ function loadDomains() {
                     </tr>
                 `;
             }
+            
+            // Handle error for searchable select
+            if (domainSearchInput) {
+                const domainDropdown = document.getElementById('domain-dropdown');
+                if (domainDropdown) {
+                    domainDropdown.innerHTML = `<div class="dropdown-loading" style="color: var(--error-color);">
+                        <i class="fas fa-exclamation-triangle"></i> ${errorMsg}
+                    </div>`;
+                }
+                domainSearchInput.placeholder = 'Error loading domains';
+            }
+            
             showNotification(errorMsg, 'error');
         });
 }
@@ -1177,6 +1499,8 @@ function setupDomainSearchAndFilters() {
     if (refreshBtn) {
         refreshBtn.addEventListener('click', function() {
             loadDomains();
+            // Also refresh modal data
+            refreshModalDomains();
         });
     }
 }
@@ -1334,20 +1658,30 @@ let filteredDNSRecords = [];
 let currentSortField = null;
 let currentSortDirection = 'asc';
 
-function loadDNSRecords(domain) {
+function loadDNSRecords(domain, page = 1, search = '') {
     const tableBody = document.querySelector('#dns-records-table tbody');
     if (!tableBody) return;
     
     // Show loading state
     tableBody.innerHTML = `
         <tr>
-            <td colspan="5" class="loading-row">
+            <td colspan="6" class="loading-row">
                 <i class="fas fa-spinner fa-spin"></i> Loading DNS records...
             </td>
         </tr>
     `;
     
-    fetch(`/api/dns/${domain}`)
+    // Build query parameters
+    const queryParams = new URLSearchParams({
+        page: page.toString(),
+        per_page: '20'
+    });
+    
+    if (search) {
+        queryParams.append('search', search);
+    }
+    
+    fetch(`/api/dns/${domain}?${queryParams.toString()}`)
         .then(response => response.json())
         .then(data => {
             if (data.success) {
@@ -1356,6 +1690,10 @@ function loadDNSRecords(domain) {
                 displayDNSRecords();
                 updateRecordsCount();
                 setupSearchAndFilters();
+                setupBulkActions();
+                
+                // Display pagination controls
+                displayDNSPaginationControls(data.pagination || {}, page, search);
             } else {
                 throw new Error(data.message || 'Failed to load DNS records');
             }
@@ -1363,7 +1701,7 @@ function loadDNSRecords(domain) {
         .catch(error => {
             tableBody.innerHTML = `
                 <tr>
-                    <td colspan="5" class="loading-row" style="color: var(--error-color);">
+                    <td colspan="6" class="loading-row" style="color: var(--error-color);">
                         <i class="fas fa-exclamation-triangle"></i> Error loading DNS records: ${error.message}
                     </td>
                 </tr>
@@ -1401,16 +1739,19 @@ function displayDNSRecords() {
         html += `
             <tr data-record-id="${record.id}">
                 <td>
+                    <input type="checkbox" class="record-checkbox" value="${escapeHtml(record.id)}" data-record-type="${escapeHtml(record.type)}" data-record-name="${escapeHtml(record.name)}">
+                </td>
+                <td>
                     <span class="record-type-badge ${typeClass}">${record.type}</span>
                 </td>
-                <td class="record-name">${escapeHtml(record.name)}</td>
-                <td class="record-content">${escapeHtml(record.content)}</td>
+                <td class="record-name" title="${escapeHtml(record.name)}" style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(record.name)}</td>
+                <td class="record-content" title="${escapeHtml(record.content)}" style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(record.content)}</td>
                 <td>${proxiedStatus}</td>
                 <td class="record-actions">
-                    <button class="btn-icon btn-edit" onclick="editRecord('${record.id}', '${escapeHtml(record.type)}', '${escapeHtml(record.name)}', '${escapeHtml(record.content)}', ${record.proxied})" title="Edit Record">
+                    <button class="btn-icon btn-edit" data-record-id="${escapeHtml(record.id)}" data-record-type="${escapeHtml(record.type)}" data-record-name="${escapeHtml(record.name)}" data-record-content="${escapeHtml(record.content)}" data-record-proxied="${record.proxied}" title="Edit Record">
                         <i class="fas fa-edit"></i>
                     </button>
-                    <button class="btn-icon btn-delete" onclick="confirmDeleteRecord('${record.id}', '${escapeHtml(record.type)}', '${escapeHtml(record.name)}', '${escapeHtml(record.content)}')" title="Delete Record">
+                    <button class="btn-icon btn-delete" data-record-id="${escapeHtml(record.id)}" data-record-type="${escapeHtml(record.type)}" data-record-name="${escapeHtml(record.name)}" data-record-content="${escapeHtml(record.content)}" title="Delete Record">
                         <i class="fas fa-trash"></i>
                     </button>
                 </td>
@@ -1419,6 +1760,295 @@ function displayDNSRecords() {
     });
     
     tableBody.innerHTML = html;
+    
+    // Add event listeners for edit and delete buttons
+    tableBody.addEventListener('click', function(e) {
+        const target = e.target.closest('button');
+        if (!target) return;
+        
+        if (target.classList.contains('btn-edit')) {
+            const recordId = target.dataset.recordId;
+            const recordType = target.dataset.recordType;
+            const recordName = target.dataset.recordName;
+            const recordContent = target.dataset.recordContent;
+            const recordProxied = target.dataset.recordProxied === 'true';
+            
+            editRecord(recordId, recordType, recordName, recordContent, recordProxied);
+        } else if (target.classList.contains('btn-delete')) {
+            const recordId = target.dataset.recordId;
+            const recordType = target.dataset.recordType;
+            const recordName = target.dataset.recordName;
+            const recordContent = target.dataset.recordContent;
+            
+            confirmDeleteRecord(recordId, recordType, recordName, recordContent);
+        }
+    });
+}
+
+// Display pagination controls for DNS records
+function displayDNSPaginationControls(pagination, currentPage, currentSearch) {
+    const paginationContainer = document.getElementById('dns-records-pagination');
+    
+    if (!paginationContainer) {
+        console.warn('DNS pagination container not found');
+        return;
+    }
+    
+    const { page, per_page, total_count, total_pages } = pagination;
+    
+    if (total_pages <= 1) {
+        paginationContainer.innerHTML = '';
+        return;
+    }
+    
+    let paginationHTML = '<div class="pagination-info">';
+    paginationHTML += `<span>Page ${page} of ${total_pages} (${total_count} records)</span>`;
+    paginationHTML += '</div>';
+    
+    paginationHTML += '<div class="pagination-controls">';
+    
+    // Previous button
+    if (page > 1) {
+        paginationHTML += `<button class="btn btn-outline btn-sm" onclick="loadDNSRecords('${getCurrentDomain()}', ${page - 1}, '${currentSearch}')">
+            <i class="fas fa-chevron-left"></i> Previous
+        </button>`;
+    }
+    
+    // Page numbers
+    const maxPageLinks = 5;
+    let startPage = Math.max(1, page - Math.floor(maxPageLinks / 2));
+    let endPage = Math.min(total_pages, startPage + maxPageLinks - 1);
+    
+    if (endPage - startPage + 1 < maxPageLinks) {
+        startPage = Math.max(1, endPage - maxPageLinks + 1);
+    }
+    
+    if (startPage > 1) {
+        paginationHTML += `<button class="btn btn-outline btn-sm" onclick="loadDNSRecords('${getCurrentDomain()}', 1, '${currentSearch}')">1</button>`;
+        if (startPage > 2) {
+            paginationHTML += '<span class="pagination-dots">...</span>';
+        }
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+        const isActive = i === page ? ' active' : '';
+        paginationHTML += `<button class="btn btn-outline btn-sm${isActive}" onclick="loadDNSRecords('${getCurrentDomain()}', ${i}, '${currentSearch}')">${i}</button>`;
+    }
+    
+    if (endPage < total_pages) {
+        if (endPage < total_pages - 1) {
+            paginationHTML += '<span class="pagination-dots">...</span>';
+        }
+        paginationHTML += `<button class="btn btn-outline btn-sm" onclick="loadDNSRecords('${getCurrentDomain()}', ${total_pages}, '${currentSearch}')">${total_pages}</button>`;
+    }
+    
+    // Next button
+    if (page < total_pages) {
+        paginationHTML += `<button class="btn btn-outline btn-sm" onclick="loadDNSRecords('${getCurrentDomain()}', ${page + 1}, '${currentSearch}')">
+            Next <i class="fas fa-chevron-right"></i>
+        </button>`;
+    }
+    
+    paginationHTML += '</div>';
+    
+    paginationContainer.innerHTML = paginationHTML;
+}
+
+// Get current domain from URL or input
+function getCurrentDomain() {
+    const domainInput = document.getElementById('domain-name');
+    if (domainInput) {
+        return domainInput.value;
+    }
+    
+    // Extract from URL path
+    const pathParts = window.location.pathname.split('/');
+    if (pathParts[1] === 'dns' && pathParts[2]) {
+        return pathParts[2];
+    }
+    
+    return '';
+}
+
+// Setup bulk actions
+function setupBulkActions() {
+    const selectAllCheckbox = document.getElementById('select-all-records');
+    const bulkDeleteBtn = document.getElementById('bulk-delete-records');
+    
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', function() {
+            const checkboxes = document.querySelectorAll('.record-checkbox');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
+            });
+            updateBulkActionsVisibility();
+        });
+    }
+    
+    if (bulkDeleteBtn) {
+        bulkDeleteBtn.addEventListener('click', function(e) {
+            // Prevent multiple clicks
+            if (this.disabled) {
+                return;
+            }
+            
+            const selectedRecords = getSelectedRecords();
+            if (selectedRecords.length === 0) {
+                showNotification('Please select records to delete', 'error');
+                return;
+            }
+            
+            // Single confirmation dialog
+            if (confirm(`Are you sure you want to delete ${selectedRecords.length} selected record(s)?`)) {
+                // Disable button immediately to prevent double-click
+                this.disabled = true;
+                bulkDeleteRecords(selectedRecords);
+            }
+        });
+    }
+    
+    // Add event listeners to individual checkboxes
+    document.addEventListener('change', function(e) {
+        if (e.target.classList.contains('record-checkbox')) {
+            updateBulkActionsVisibility();
+            updateSelectAllCheckbox();
+        }
+    });
+}
+
+// Get selected record IDs
+function getSelectedRecords() {
+    const checkboxes = document.querySelectorAll('.record-checkbox:checked');
+    return Array.from(checkboxes).map(checkbox => checkbox.value);
+}
+
+// Update bulk actions visibility
+function updateBulkActionsVisibility() {
+    const selectedRecords = getSelectedRecords();
+    const bulkDeleteBtn = document.getElementById('bulk-delete-records');
+    
+    if (bulkDeleteBtn) {
+        if (selectedRecords.length > 0) {
+            bulkDeleteBtn.style.display = 'inline-block';
+            bulkDeleteBtn.textContent = `Delete ${selectedRecords.length} Selected`;
+        } else {
+            bulkDeleteBtn.style.display = 'none';
+        }
+    }
+}
+
+// Update select all checkbox state
+function updateSelectAllCheckbox() {
+    const selectAllCheckbox = document.getElementById('select-all-records');
+    const checkboxes = document.querySelectorAll('.record-checkbox');
+    const checkedCheckboxes = document.querySelectorAll('.record-checkbox:checked');
+    
+    if (selectAllCheckbox) {
+        if (checkedCheckboxes.length === 0) {
+            selectAllCheckbox.indeterminate = false;
+            selectAllCheckbox.checked = false;
+        } else if (checkedCheckboxes.length === checkboxes.length) {
+            selectAllCheckbox.indeterminate = false;
+            selectAllCheckbox.checked = true;
+        } else {
+            selectAllCheckbox.indeterminate = true;
+            selectAllCheckbox.checked = false;
+        }
+    }
+}
+
+// Bulk delete records
+function bulkDeleteRecords(recordIds) {
+    const domain = getCurrentDomain();
+    const bulkDeleteBtn = document.getElementById('bulk-delete-records');
+    
+    // Disable button and show loading state
+    const originalText = bulkDeleteBtn.textContent;
+    bulkDeleteBtn.disabled = true;
+    bulkDeleteBtn.textContent = 'Deleting...';
+    
+    fetch(`/api/dns/${domain}/bulk`, {
+        method: 'DELETE',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            record_ids: recordIds
+        }),
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Bulk delete response:', data);
+        
+        // Count actual successful deletions from results
+        let actualSuccessCount = 0;
+        let errorMessages = [];
+        
+        if (data.results) {
+            data.results.forEach(result => {
+                if (result.success) {
+                    actualSuccessCount++;
+                } else if (result.error && !result.error.includes('Record does not exist')) {
+                    // Only show errors that are not "record doesn't exist"
+                    errorMessages.push(`Record ${result.record_id}: ${result.error}`);
+                    console.error('Record deletion error:', result);
+                }
+            });
+        }
+        
+        // Always reload DNS records to refresh the UI
+        loadDNSRecords(domain);
+        
+        if (actualSuccessCount > 0) {
+            showNotification(`Successfully deleted ${actualSuccessCount} record(s)`, 'success');
+        } else if (data.total_count > 0) {
+            // Records might have been deleted already or don't exist
+            showNotification(`Records processed (${data.total_count} selected)`, 'info');
+        }
+        
+        // Show specific errors if any
+        if (errorMessages.length > 0) {
+            console.error('Deletion errors:', errorMessages);
+            showNotification(`Some records had errors: ${errorMessages[0]}`, 'warning');
+        }
+    })
+    .catch(error => {
+        console.error('Bulk delete error:', error);
+        showNotification(`Error: ${error.message || 'Something went wrong'}`, 'error');
+    })
+    .finally(() => {
+        // Re-enable button
+        if (bulkDeleteBtn) {
+            bulkDeleteBtn.disabled = false;
+            bulkDeleteBtn.textContent = originalText;
+            bulkDeleteBtn.style.display = 'none';
+        }
+        
+        // Clear all selections
+        clearAllSelections();
+    });
+}
+
+// Clear all checkbox selections
+function clearAllSelections() {
+    const selectAllCheckbox = document.getElementById('select-all-records');
+    const checkboxes = document.querySelectorAll('.record-checkbox');
+    
+    if (selectAllCheckbox) {
+        selectAllCheckbox.checked = false;
+        selectAllCheckbox.indeterminate = false;
+    }
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    
+    updateBulkActionsVisibility();
 }
 
 // Setup search and filter functionality
@@ -1580,6 +2210,17 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// Utility function to escape JavaScript strings
+function escapeJs(text) {
+    if (typeof text !== 'string') return text;
+    return text.replace(/\\/g, '\\\\')
+               .replace(/'/g, "\\'")
+               .replace(/"/g, '\\"')
+               .replace(/\n/g, '\\n')
+               .replace(/\r/g, '\\r')
+               .replace(/\t/g, '\\t');
 }
 
 // Modal management functions
@@ -1769,6 +2410,96 @@ function displayResultsLog(results) {
     
     // Show the results log
     resultsLog.classList.remove('hidden');
+}
+
+// Display pagination controls
+function displayPaginationControls(pagination, currentPage, currentSearch) {
+    const paginationContainer = document.getElementById('domains-pagination');
+    
+    // If pagination container doesn't exist, return early
+    if (!paginationContainer) {
+        console.warn('Pagination container not found');
+        return;
+    }
+    
+    const { page, per_page, total_count, total_pages } = pagination;
+    
+    if (total_pages <= 1) {
+        paginationContainer.innerHTML = '';
+        return;
+    }
+    
+    let paginationHTML = '<div class="pagination-info">';
+    paginationHTML += `<span>Page ${page} of ${total_pages} (${total_count} domains)</span>`;
+    paginationHTML += '</div>';
+    
+    paginationHTML += '<div class="pagination-controls">';
+    
+    // Previous button
+    if (page > 1) {
+        paginationHTML += `<button class="btn btn-outline btn-sm" onclick="loadDomains(${page - 1}, '${currentSearch}')">
+            <i class="fas fa-chevron-left"></i> Previous
+        </button>`;
+    }
+    
+    // Page numbers
+    const maxPageLinks = 5;
+    let startPage = Math.max(1, page - Math.floor(maxPageLinks / 2));
+    let endPage = Math.min(total_pages, startPage + maxPageLinks - 1);
+    
+    if (endPage - startPage + 1 < maxPageLinks) {
+        startPage = Math.max(1, endPage - maxPageLinks + 1);
+    }
+    
+    if (startPage > 1) {
+        paginationHTML += `<button class="btn btn-outline btn-sm" onclick="loadDomains(1, '${currentSearch}')">1</button>`;
+        if (startPage > 2) {
+            paginationHTML += '<span class="pagination-dots">...</span>';
+        }
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+        const isActive = i === page ? ' active' : '';
+        paginationHTML += `<button class="btn btn-outline btn-sm${isActive}" onclick="loadDomains(${i}, '${currentSearch}')">${i}</button>`;
+    }
+    
+    if (endPage < total_pages) {
+        if (endPage < total_pages - 1) {
+            paginationHTML += '<span class="pagination-dots">...</span>';
+        }
+        paginationHTML += `<button class="btn btn-outline btn-sm" onclick="loadDomains(${total_pages}, '${currentSearch}')">${total_pages}</button>`;
+    }
+    
+    // Next button
+    if (page < total_pages) {
+        paginationHTML += `<button class="btn btn-outline btn-sm" onclick="loadDomains(${page + 1}, '${currentSearch}')">
+            Next <i class="fas fa-chevron-right"></i>
+        </button>`;
+    }
+    
+    paginationHTML += '</div>';
+    
+    paginationContainer.innerHTML = paginationHTML;
+}
+
+// Setup domain search with pagination
+function setupDomainSearchWithPagination() {
+    const searchInput = document.getElementById('search-domains');
+    if (!searchInput) return;
+    
+    let searchTimeout;
+    
+    searchInput.addEventListener('input', function() {
+        const searchTerm = this.value.trim();
+        
+        // Clear previous timeout
+        clearTimeout(searchTimeout);
+        
+        // Add a small delay to avoid too many API calls
+        searchTimeout = setTimeout(() => {
+            loadDomains(1, searchTerm, false);
+        }, 300);
+    });
 }
 
 // Helper function to simulate API calls (for UI demonstration)

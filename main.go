@@ -120,6 +120,7 @@ func setupRoutes(app *fiber.App) {
 	app.Get("/dns/:domain", handlers.RenderDNSPageHandler(store))
 	app.Get("/api/dns/:domain", handlers.GetDNSRecordsHandler(store))
 	app.Post("/api/dns/:domain", handlers.UpdateDNSRecordsHandler(store))
+	app.Delete("/api/dns/:domain/bulk", handlers.BulkDeleteDNSRecordsHandler(store))
 	app.Put("/api/dns/:domain/:id", handlers.EditDNSRecordHandler(store))
 	app.Delete("/api/dns/:domain/:id", handlers.DeleteDNSRecordHandler(store))
 }

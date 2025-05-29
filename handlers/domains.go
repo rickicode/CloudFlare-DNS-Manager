@@ -18,7 +18,7 @@ type Domain struct {
 	CreatedOn string `json:"created_on"`
 }
 
-// DomainsHandler handles fetching domains from Cloudflare
+// DomainsHandler handles fetching domains from Cloudflare with pagination
 func DomainsHandler(store *session.Store) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		// Get API client from session
@@ -31,6 +31,22 @@ func DomainsHandler(store *session.Store) fiber.Handler {
 			})
 		}
 
+		// Parse pagination parameters
+		page := c.QueryInt("page", 1)
+		perPage := c.QueryInt("per_page", 20) // Default 20 domains per page to match Cloudflare
+		search := c.Query("search", "")       // Search query
+
+		// Limit per_page to reasonable values
+		if perPage > 100 {
+			perPage = 100
+		}
+		if perPage < 1 {
+			perPage = 20
+		}
+		if page < 1 {
+			page = 1
+		}
+
 		// Get zones (domains) from Cloudflare
 		zones, err := api.ListZones(context.Background())
 		if err != nil {
@@ -39,6 +55,35 @@ func DomainsHandler(store *session.Store) fiber.Handler {
 				"message": "Failed to fetch domains",
 				"error":   err.Error(),
 			})
+		}
+
+		// Apply search filter if provided
+		if search != "" {
+			filteredZones := []cloudflare.Zone{}
+			searchLower := strings.ToLower(search)
+			for _, zone := range zones {
+				if strings.Contains(strings.ToLower(zone.Name), searchLower) {
+					filteredZones = append(filteredZones, zone)
+				}
+			}
+			zones = filteredZones
+		}
+
+		// Calculate pagination
+		totalCount := len(zones)
+		totalPages := (totalCount + perPage - 1) / perPage
+
+		// Apply pagination
+		startIndex := (page - 1) * perPage
+		endIndex := startIndex + perPage
+
+		if startIndex > totalCount {
+			zones = []cloudflare.Zone{}
+		} else {
+			if endIndex > totalCount {
+				endIndex = totalCount
+			}
+			zones = zones[startIndex:endIndex]
 		}
 
 		// Convert zones to Domain objects
@@ -57,9 +102,16 @@ func DomainsHandler(store *session.Store) fiber.Handler {
 			}
 		}
 
+		// Return paginated response
 		return c.JSON(fiber.Map{
 			"success": true,
 			"data":    domains,
+			"pagination": fiber.Map{
+				"page":        page,
+				"per_page":    perPage,
+				"total_count": totalCount,
+				"total_pages": totalPages,
+			},
 		})
 	}
 }
@@ -78,7 +130,16 @@ func RenderDomainsPageHandler(store *session.Store) fiber.Handler {
 			return c.Redirect("/")
 		}
 
-		return c.Render("domains", fiber.Map{})
+		// Get email from session
+		email := sess.Get("apiEmail")
+		emailStr := ""
+		if email != nil {
+			emailStr = email.(string)
+		}
+
+		return c.Render("domains", fiber.Map{
+			"Email": emailStr,
+		})
 	}
 }
 

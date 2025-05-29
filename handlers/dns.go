@@ -63,8 +63,38 @@ func GetDNSRecordsHandler(store *session.Store) fiber.Handler {
 			})
 		}
 
-		// Get DNS records
-		records, _, err := api.ListDNSRecords(context.Background(), cloudflare.ZoneIdentifier(zoneID), cloudflare.ListDNSRecordsParams{})
+		// Parse pagination parameters
+		page := c.QueryInt("page", 1)
+		perPage := c.QueryInt("per_page", 20) // Default 20 records per page
+		search := c.Query("search", "")       // Search query
+		recordType := c.Query("type", "")     // Record type filter
+
+		// Limit per_page to reasonable values
+		if perPage > 100 {
+			perPage = 100
+		}
+		if perPage < 1 {
+			perPage = 20
+		}
+		if page < 1 {
+			page = 1
+		}
+
+		// Build ListDNSRecordsParams with filters
+		listParams := cloudflare.ListDNSRecordsParams{}
+
+		// Add search filter if provided
+		if search != "" {
+			listParams.Name = search
+		}
+
+		// Add type filter if provided
+		if recordType != "" {
+			listParams.Type = recordType
+		}
+
+		// Get all DNS records first (Cloudflare API doesn't support pagination for DNS records in the same way)
+		records, _, err := api.ListDNSRecords(context.Background(), cloudflare.ZoneIdentifier(zoneID), listParams)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"success": false,
@@ -74,7 +104,7 @@ func GetDNSRecordsHandler(store *session.Store) fiber.Handler {
 		}
 
 		// Convert to our simplified model
-		dnsRecords := make([]DNSRecord, 0, len(records))
+		allDNSRecords := make([]DNSRecord, 0, len(records))
 		for _, record := range records {
 			// Handle the pointer to bool
 			proxiedValue := false
@@ -82,7 +112,7 @@ func GetDNSRecordsHandler(store *session.Store) fiber.Handler {
 				proxiedValue = *record.Proxied
 			}
 
-			dnsRecords = append(dnsRecords, DNSRecord{
+			allDNSRecords = append(allDNSRecords, DNSRecord{
 				ID:      record.ID,
 				Type:    record.Type,
 				Name:    record.Name,
@@ -92,9 +122,39 @@ func GetDNSRecordsHandler(store *session.Store) fiber.Handler {
 			})
 		}
 
+		// Implement pagination manually
+		totalCount := len(allDNSRecords)
+		totalPages := (totalCount + perPage - 1) / perPage
+
+		// Calculate start and end indices
+		startIndex := (page - 1) * perPage
+		endIndex := startIndex + perPage
+
+		if startIndex >= totalCount {
+			startIndex = 0
+			endIndex = 0
+		} else if endIndex > totalCount {
+			endIndex = totalCount
+		}
+
+		// Get the paginated slice
+		paginatedRecords := []DNSRecord{}
+		if startIndex < endIndex {
+			paginatedRecords = allDNSRecords[startIndex:endIndex]
+		}
+
+		// Build pagination info
+		pagination := map[string]interface{}{
+			"page":        page,
+			"per_page":    perPage,
+			"total_count": totalCount,
+			"total_pages": totalPages,
+		}
+
 		return c.JSON(fiber.Map{
-			"success": true,
-			"data":    dnsRecords,
+			"success":    true,
+			"data":       paginatedRecords,
+			"pagination": pagination,
 		})
 	}
 }
@@ -118,8 +178,16 @@ func RenderDNSPageHandler(store *session.Store) fiber.Handler {
 			return c.Redirect("/")
 		}
 
+		// Get email from session
+		email := sess.Get("apiEmail")
+		emailStr := ""
+		if email != nil {
+			emailStr = email.(string)
+		}
+
 		return c.Render("dns", fiber.Map{
 			"Domain": domainName,
+			"Email":  emailStr,
 		})
 	}
 }
@@ -244,6 +312,98 @@ func EditDNSRecordHandler(store *session.Store) fiber.Handler {
 			"success": true,
 			"message": fmt.Sprintf("Updated %s record: %s", req.Type, recordName),
 			"record":  record,
+		})
+	}
+}
+
+// BulkDeleteDNSRecordsHandler handles bulk deletion of DNS records
+func BulkDeleteDNSRecordsHandler(store *session.Store) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		domainName := c.Params("domain")
+		if domainName == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"success": false,
+				"message": "Domain name is required",
+			})
+		}
+
+		// Parse request body
+		var req struct {
+			RecordIDs []string `json:"record_ids"`
+		}
+		if err := c.BodyParser(&req); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"success": false,
+				"message": "Invalid request format",
+				"error":   err.Error(),
+			})
+		}
+
+		if len(req.RecordIDs) == 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"success": false,
+				"message": "No records specified for deletion",
+			})
+		}
+
+		// Get API client from session
+		api, err := GetAPIClient(c, store)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"success": false,
+				"message": "API client error",
+				"error":   err.Error(),
+			})
+		}
+
+		// Get zone ID
+		zoneID, err := api.ZoneIDByName(domainName)
+		if err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"success": false,
+				"message": "Domain not found",
+				"error":   err.Error(),
+			})
+		}
+
+		// Delete records
+		results := make([]map[string]interface{}, 0, len(req.RecordIDs))
+		successCount := 0
+
+		for _, recordID := range req.RecordIDs {
+			err := api.DeleteDNSRecord(context.Background(), cloudflare.ZoneIdentifier(zoneID), recordID)
+			if err != nil {
+				// Check if error is "record doesn't exist" - treat as success since it's already gone
+				errorStr := err.Error()
+				if strings.Contains(errorStr, "Record does not exist") || strings.Contains(errorStr, "81044") {
+					results = append(results, map[string]interface{}{
+						"record_id": recordID,
+						"success":   true,
+						"note":      "Record already deleted",
+					})
+					successCount++
+				} else {
+					results = append(results, map[string]interface{}{
+						"record_id": recordID,
+						"success":   false,
+						"error":     errorStr,
+					})
+				}
+			} else {
+				results = append(results, map[string]interface{}{
+					"record_id": recordID,
+					"success":   true,
+				})
+				successCount++
+			}
+		}
+
+		return c.JSON(fiber.Map{
+			"success":       successCount > 0,
+			"message":       fmt.Sprintf("Deleted %d of %d records", successCount, len(req.RecordIDs)),
+			"results":       results,
+			"success_count": successCount,
+			"total_count":   len(req.RecordIDs),
 		})
 	}
 }
