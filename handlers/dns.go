@@ -509,13 +509,13 @@ func UpdateDNSRecordsHandler(store *session.Store) fiber.Handler {
 				continue
 			}
 
-			// Parse line: TYPE|NAME|CONTENT
+			// Parse line: TYPE|NAME|CONTENT|PROXIED (PROXIED is optional, defaults to true)
 			parts := strings.Split(line, "|")
-			if len(parts) != 3 {
+			if len(parts) < 3 || len(parts) > 4 {
 				results = append(results, map[string]interface{}{
 					"success": false,
 					"line":    line,
-					"message": "Invalid format, expected TYPE|NAME|CONTENT",
+					"message": "Invalid format, expected TYPE|NAME|CONTENT or TYPE|NAME|CONTENT|PROXIED",
 				})
 				continue
 			}
@@ -523,6 +523,12 @@ func UpdateDNSRecordsHandler(store *session.Store) fiber.Handler {
 			recordType := strings.TrimSpace(parts[0])
 			recordName := strings.TrimSpace(parts[1])
 			recordContent := strings.TrimSpace(parts[2])
+
+			// Parse proxied value (default to true if not specified)
+			proxiedStr := "true"
+			if len(parts) == 4 {
+				proxiedStr = strings.TrimSpace(parts[3])
+			}
 
 			// Validate record type
 			validTypes := []string{"A", "AAAA", "CNAME", "MX", "TXT", "NS", "SRV", "CAA", "PTR"}
@@ -605,8 +611,20 @@ func UpdateDNSRecordsHandler(store *session.Store) fiber.Handler {
 				recordContent = rootRecords[0].Content
 			}
 
-			// Prepare the proxied value as pointer
-			proxied := true
+			// Parse the proxied value
+			proxied := false
+			if proxiedStr == "true" || proxiedStr == "1" || proxiedStr == "yes" {
+				proxied = true
+			} else if proxiedStr == "false" || proxiedStr == "0" || proxiedStr == "no" {
+				proxied = false
+			} else {
+				results = append(results, map[string]interface{}{
+					"success": false,
+					"line":    line,
+					"message": "Invalid proxied value. Use 'true' or 'false'",
+				})
+				continue
+			}
 
 			// First check if ANY record with the same name exists (regardless of type)
 			existingRecords, _, err := api.ListDNSRecords(
@@ -669,7 +687,7 @@ func UpdateDNSRecordsHandler(store *session.Store) fiber.Handler {
 					results = append(results, map[string]interface{}{
 						"success": true,
 						"line":    line,
-						"message": fmt.Sprintf("Updated %s record for %s", recordType, recordName),
+						"message": fmt.Sprintf("✅ Updated %s record: %s → %s (proxied: %t)", recordType, recordName, recordContent, proxied),
 						"id":      record.ID,
 						"updated": true,
 					})
@@ -710,7 +728,7 @@ func UpdateDNSRecordsHandler(store *session.Store) fiber.Handler {
 					results = append(results, map[string]interface{}{
 						"success":     true,
 						"line":        line,
-						"message":     fmt.Sprintf("Changed record type from %s to %s for %s", sameNameRecord.Type, recordType, recordName),
+						"message":     fmt.Sprintf("🔄 Changed %s record to %s: %s → %s (proxied: %t)", sameNameRecord.Type, recordType, recordName, recordContent, proxied),
 						"id":          response.ID,
 						"updated":     true,
 						"typeChanged": true,
@@ -741,15 +759,41 @@ func UpdateDNSRecordsHandler(store *session.Store) fiber.Handler {
 				results = append(results, map[string]interface{}{
 					"success": true,
 					"line":    line,
-					"message": fmt.Sprintf("Created %s record for %s", recordType, recordName),
+					"message": fmt.Sprintf("➕ Created %s record: %s → %s (proxied: %t)", recordType, recordName, recordContent, proxied),
 					"id":      response.ID,
 					"created": true,
 				})
 			}
 		}
 
+		// Count successful operations
+		successCount := 0
+		for _, result := range results {
+			if success, ok := result["success"].(bool); ok && success {
+				successCount++
+			}
+		}
+
+		// Generate summary message with more detail
+		totalCount := len(results)
+		message := ""
+		if totalCount == 0 {
+			message = "No DNS records to process"
+		} else if successCount == totalCount {
+			if totalCount == 1 {
+				message = "✅ Successfully processed 1 DNS record"
+			} else {
+				message = fmt.Sprintf("✅ Successfully processed all %d DNS records", totalCount)
+			}
+		} else if successCount == 0 {
+			message = fmt.Sprintf("❌ Failed to process all %d DNS records", totalCount)
+		} else {
+			message = fmt.Sprintf("⚠️ Processed %d of %d DNS records successfully (%d failed)", successCount, totalCount, totalCount-successCount)
+		}
+
 		return c.JSON(fiber.Map{
 			"success": true,
+			"message": message,
 			"results": results,
 		})
 	}

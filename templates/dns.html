@@ -51,9 +51,9 @@
                 
                 <div class="form-group">
                     <label for="dns-records"><i class="fas fa-list"></i> DNS Records (one per line):</label>
-                    <textarea id="dns-records" class="form-control" placeholder="Format: TYPE|NAME|CONTENT&#10;Example: A|@|192.0.2.1&#10;Example: CNAME|www|example.com" rows="8"></textarea>
+                    <textarea id="dns-records" class="form-control" placeholder="Format: TYPE|NAME|CONTENT|PROXIED&#10;Example: A|@|138.199.137.90|true&#10;Example: CNAME|www|@|true&#10;Example: CNAME|shop|@|true&#10;Example: CNAME|buy|@|true" rows="8"></textarea>
                     <small class="help-text">
-                        <p><strong>Format:</strong> TYPE|NAME|CONTENT</p>
+                        <p><strong>Format:</strong> TYPE|NAME|CONTENT|PROXIED (PROXIED is optional, defaults to true)</p>
                         <p><strong>TYPE:</strong> Supported types: A, AAAA, CNAME, MX, TXT, NS, SRV, CAA, PTR</p>
                         <p><strong>NAME:</strong> Use @ for root domain, or enter subdomain</p>
                         <p><strong>CONTENT:</strong> Depends on record type:</p>
@@ -65,14 +65,15 @@
                             <li><strong>TXT</strong>: Text content (e.g., v=spf1 include:_spf.example.com ~all)</li>
                             <li><strong>NS</strong>: Nameserver domain (e.g., ns1.example.com)</li>
                         </ul>
+                        <p><strong>PROXIED:</strong> true or false (whether to proxy through Cloudflare)</p>
                         <p><strong>Examples:</strong></p>
                         <ul>
-                            <li>A|@|192.0.2.1</li>
-                            <li>A|mail|192.0.2.2</li>
-                            <li>CNAME|www|{{ .Domain }}</li>
-                            <li>CNAME|www|@</li>
-                            <li>A|shop|@</li>
-                            <li>A|buy|@</li>
+                            <li>A|@|138.199.137.90|true</li>
+                            <li>CNAME|www|@|true</li>
+                            <li>CNAME|shop|@|true</li>
+                            <li>CNAME|buy|@|true</li>
+                            <li>A|mail|192.0.2.2|false</li>
+                            <li>CNAME|blog|{{ .Domain }}|true</li>
                         </ul>
                         <p><strong>Note:</strong> When @ is used in the CONTENT field, it represents the root domain. For A records, it will use the IP address of the root domain.</p>
                     </small>

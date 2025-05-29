@@ -1627,17 +1627,37 @@ function setupDNSForm() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                showNotification(data.message, 'success');
+                // Always show a notification with meaningful message
+                const message = data.message || 'DNS records processed successfully';
+                showNotification(message, 'success');
                 
                 // Display results if available
-                if (data.results) {
+                if (data.results && data.results.length > 0) {
                     displayResultsLog(data.results);
+                    
+                    // Count successful operations for additional feedback
+                    const successCount = data.results.filter(r => r.success).length;
+                    const totalCount = data.results.length;
+                    
+                    if (successCount > 0) {
+                        // Show additional summary notification
+                        setTimeout(() => {
+                            showNotification(`✅ Successfully processed ${successCount} of ${totalCount} DNS records`, 'success');
+                        }, 500);
+                    }
+                } else {
+                    // If no results, show generic success
+                    showNotification('✅ DNS records operation completed successfully', 'success');
                 }
                 
                 // Reload DNS records
                 loadDNSRecords(domain);
+                
+                // Clear the form after successful submission
+                document.getElementById('dns-records').value = '';
             } else {
-                showNotification(`Error: ${data.message || 'Failed to update DNS records'}`, 'error');
+                const errorMessage = data.message || 'Failed to update DNS records';
+                showNotification(`❌ Error: ${errorMessage}`, 'error');
             }
         })
         .catch(error => {

@@ -3,12 +3,15 @@ module hijicloudflareDNS
 go 1.24.3
 
 require (
+	github.com/cloudflare/cloudflare-go v0.115.0
+	github.com/gofiber/fiber/v2 v2.52.8
+	github.com/gofiber/template/html/v2 v2.1.3
+)
+
+require (
 	github.com/andybalholm/brotli v1.1.0 // indirect
-	github.com/cloudflare/cloudflare-go v0.115.0 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
-	github.com/gofiber/fiber/v2 v2.52.8 // indirect
 	github.com/gofiber/template v1.8.3 // indirect
-	github.com/gofiber/template/html/v2 v2.1.3 // indirect
 	github.com/gofiber/utils v1.1.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
