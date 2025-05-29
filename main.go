@@ -115,6 +115,7 @@ func setupRoutes(app *fiber.App) {
 	app.Get("/domains", handlers.RenderDomainsPageHandler(store))
 	app.Get("/api/domains", handlers.DomainsHandler(store))
 	app.Post("/api/domains/add", handlers.AddDomainsHandler(store))
+	app.Post("/api/domains/bulk-dns", handlers.BulkDNSHandler(store))
 
 	// DNS management
 	app.Get("/dns/:domain", handlers.RenderDNSPageHandler(store))

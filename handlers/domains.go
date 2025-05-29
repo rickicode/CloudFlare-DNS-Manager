@@ -359,3 +359,219 @@ func addDNSRecordsFromTemplate(api *cloudflare.API, zoneID, domain string, templ
 
 	return recordsAdded, errors
 }
+
+// BulkDNSRequest represents the request for bulk DNS record addition
+type BulkDNSRequest struct {
+	Records string `json:"records"`
+}
+
+// BulkDNSResponse represents the response for bulk DNS addition results
+type BulkDNSResponse struct {
+	Success bool            `json:"success"`
+	Results []BulkDNSResult `json:"results"`
+	Message string          `json:"message"`
+}
+
+// BulkDNSResult represents the result of adding DNS records to a single domain
+type BulkDNSResult struct {
+	Domain       string   `json:"domain"`
+	Success      bool     `json:"success"`
+	Message      string   `json:"message"`
+	Error        string   `json:"error,omitempty"`
+	RecordsAdded int      `json:"records_added"`
+	RecordErrors []string `json:"record_errors,omitempty"`
+}
+
+// BulkDNSHandler handles adding DNS records to multiple domains
+func BulkDNSHandler(store *session.Store) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		// Get API client from session
+		api, err := GetAPIClient(c, store)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"success": false,
+				"message": "API client error",
+				"error":   err.Error(),
+			})
+		}
+
+		// Parse request
+		req := new(BulkDNSRequest)
+		if err := c.BodyParser(req); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"success": false,
+				"message": "Invalid request format",
+				"error":   err.Error(),
+			})
+		}
+
+		// Parse DNS records from the request
+		dnsRecords := parseBulkDNSRecords(req.Records)
+		if len(dnsRecords) == 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"success": false,
+				"message": "No valid DNS records provided",
+			})
+		}
+
+		// Group records by domain
+		domainRecords := groupRecordsByDomain(dnsRecords)
+
+		// Process each domain
+		results := make([]BulkDNSResult, 0, len(domainRecords))
+		successCount := 0
+		totalRecordsAdded := 0
+
+		for domain, records := range domainRecords {
+			result := addBulkDNSRecordsToDomain(api, domain, records)
+			results = append(results, result)
+			if result.Success {
+				successCount++
+				totalRecordsAdded += result.RecordsAdded
+			}
+		}
+
+		// Return results
+		message := fmt.Sprintf("Successfully processed %d domains, added %d DNS records", successCount, totalRecordsAdded)
+
+		return c.JSON(BulkDNSResponse{
+			Success: true,
+			Results: results,
+			Message: message,
+		})
+	}
+}
+
+// DNSRecordBulk represents a single DNS record for bulk processing
+type DNSRecordBulk struct {
+	Type    string
+	Name    string
+	Content string
+	Domain  string
+}
+
+// parseBulkDNSRecords parses the DNS records string into a slice of DNSRecordBulk
+func parseBulkDNSRecords(recordsText string) []DNSRecordBulk {
+	lines := strings.Split(recordsText, "\n")
+	records := make([]DNSRecordBulk, 0)
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		parts := strings.Split(line, "|")
+		if len(parts) != 4 {
+			continue // Skip invalid format
+		}
+
+		record := DNSRecordBulk{
+			Type:    strings.TrimSpace(parts[0]),
+			Name:    strings.TrimSpace(parts[1]),
+			Content: strings.TrimSpace(parts[2]),
+			Domain:  strings.TrimSpace(parts[3]),
+		}
+
+		// Basic validation
+		if record.Type != "" && record.Name != "" && record.Content != "" && record.Domain != "" && isValidDomain(record.Domain) {
+			records = append(records, record)
+		}
+	}
+
+	return records
+}
+
+// groupRecordsByDomain groups DNS records by domain
+func groupRecordsByDomain(records []DNSRecordBulk) map[string][]DNSRecordBulk {
+	domainRecords := make(map[string][]DNSRecordBulk)
+
+	for _, record := range records {
+		if _, exists := domainRecords[record.Domain]; !exists {
+			domainRecords[record.Domain] = make([]DNSRecordBulk, 0)
+		}
+		domainRecords[record.Domain] = append(domainRecords[record.Domain], record)
+	}
+
+	return domainRecords
+}
+
+// addBulkDNSRecordsToDomain adds DNS records to a specific domain
+func addBulkDNSRecordsToDomain(api *cloudflare.API, domain string, records []DNSRecordBulk) BulkDNSResult {
+	result := BulkDNSResult{
+		Domain:  domain,
+		Success: false,
+	}
+
+	// Get zone ID for the domain
+	zoneID, err := api.ZoneIDByName(domain)
+	if err != nil {
+		result.Error = err.Error()
+		result.Message = fmt.Sprintf("Failed to find domain: %s", err.Error())
+		return result
+	}
+
+	recordsAdded := 0
+	errors := []string{}
+
+	for _, record := range records {
+		// Parse proxied setting (default to true for A and CNAME, false for others)
+		proxied := false
+		if record.Type == "A" || record.Type == "AAAA" || record.Type == "CNAME" {
+			proxied = true
+		}
+
+		// Convert @ to domain for name
+		recordName := record.Name
+		if recordName == "@" {
+			recordName = domain
+		} else if !strings.Contains(recordName, ".") {
+			recordName = recordName + "." + domain
+		}
+
+		// Convert @ to domain for content (for CNAME records)
+		recordContent := record.Content
+		if recordContent == "@" {
+			recordContent = domain
+		}
+
+		// Create DNS record params
+		params := cloudflare.CreateDNSRecordParams{
+			Type:    record.Type,
+			Name:    recordName,
+			Content: recordContent,
+			TTL:     1, // Auto TTL
+		}
+
+		// Set proxied for supported record types
+		if record.Type == "A" || record.Type == "AAAA" || record.Type == "CNAME" {
+			params.Proxied = &proxied
+		}
+
+		_, err := api.CreateDNSRecord(context.Background(), cloudflare.ZoneIdentifier(zoneID), params)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("Failed to create %s record for %s: %s", record.Type, recordName, err.Error()))
+		} else {
+			recordsAdded++
+		}
+	}
+
+	result.RecordsAdded = recordsAdded
+	result.RecordErrors = errors
+
+	if recordsAdded > 0 {
+		result.Success = true
+		if len(errors) > 0 {
+			result.Message = fmt.Sprintf("Added %d DNS records (%d failed)", recordsAdded, len(errors))
+		} else {
+			result.Message = fmt.Sprintf("Successfully added %d DNS records", recordsAdded)
+		}
+	} else {
+		result.Message = "Failed to add any DNS records"
+		if len(errors) > 0 {
+			result.Error = strings.Join(errors, "; ")
+		}
+	}
+
+	return result
+}

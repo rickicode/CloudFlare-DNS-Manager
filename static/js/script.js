@@ -66,7 +66,8 @@ const DEFAULT_DNS_TEMPLATE = {
         'A|@|138.199.137.90|true',
         'CNAME|www|@|true',
         'CNAME|shop|@|true',
-        'CNAME|buy|@|true'
+        'CNAME|buy|@|true',
+        'CNAME|product|@|true'
     ]
 };
 
@@ -687,6 +688,7 @@ function initApp() {
     setupDomainSelect();
     setupDNSForm();
     setupAddDomainsForm();
+    setupBulkDNSForm();
     setupDNSTemplates();
     setupModals();
     
@@ -1021,6 +1023,164 @@ function displayAddDomainsResults(results) {
                 copyNameserverToClipboard(this);
             });
         });
+    });
+    
+    // Show the results section
+    resultsSection.classList.remove('hidden');
+}
+
+// Bulk DNS Form Setup
+function setupBulkDNSForm() {
+    const bulkDNSForm = document.getElementById('bulk-dns-form');
+    if (!bulkDNSForm) return;
+
+    bulkDNSForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const recordsText = document.getElementById('bulk-dns-input').value.trim();
+        
+        // Validate inputs
+        if (!recordsText) {
+            showNotification('Please enter at least one DNS record', 'error');
+            return;
+        }
+        
+        // Basic validation for DNS records format
+        const recordLines = recordsText.split('\n').filter(line => line.trim() !== '');
+        let hasErrors = false;
+        
+        recordLines.forEach(line => {
+            const parts = line.trim().split('|');
+            if (parts.length !== 4) {
+                showNotification(`Invalid DNS record format: ${line.trim()} (expected TYPE|NAME|CONTENT|DOMAIN)`, 'error');
+                hasErrors = true;
+            } else {
+                const domain = parts[3].trim();
+                if (!isValidDomainFormat(domain)) {
+                    showNotification(`Invalid domain format: ${domain}`, 'error');
+                    hasErrors = true;
+                }
+            }
+        });
+        
+        if (hasErrors) return;
+        
+        // Disable form and show loading state
+        const submitBtn = bulkDNSForm.querySelector('button[type="submit"]');
+        const originalText = submitBtn.textContent;
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Adding DNS Records...';
+        
+        // Send bulk DNS request
+        fetch('/api/domains/bulk-dns', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                records: recordsText
+            }),
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification(data.message, 'success');
+                
+                // Display detailed results
+                displayBulkDNSResults(data.results);
+                
+                // Clear the form
+                document.getElementById('bulk-dns-input').value = '';
+                
+                // Reload domains list
+                setTimeout(() => {
+                    loadDomains();
+                }, 2000);
+            } else {
+                showNotification(`Error: ${data.message || 'Failed to add DNS records'}`, 'error');
+            }
+        })
+        .catch(error => {
+            showNotification(`Error: ${error.message || 'Something went wrong'}`, 'error');
+        })
+        .finally(() => {
+            // Re-enable form
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+        });
+    });
+}
+
+// Display bulk DNS results
+function displayBulkDNSResults(results) {
+    const resultsSection = document.getElementById('bulk-dns-results');
+    const resultsContent = document.getElementById('bulk-dns-content');
+    
+    if (!resultsSection || !resultsContent) return;
+    
+    // Clear previous results
+    resultsContent.innerHTML = '';
+    
+    // Count successes and failures
+    const successCount = results.filter(r => r.success).length;
+    const failCount = results.filter(r => !r.success).length;
+    const totalRecords = results.reduce((sum, r) => sum + r.records_added, 0);
+    
+    // Add summary
+    const summaryEl = document.createElement('div');
+    summaryEl.className = 'result-summary';
+    summaryEl.innerHTML = `<strong>Summary:</strong> Added ${totalRecords} DNS records across ${successCount} domains (${failCount} domains failed).`;
+    resultsContent.appendChild(summaryEl);
+    
+    // Add separator
+    const separator = document.createElement('hr');
+    separator.style.margin = '15px 0';
+    separator.style.border = '0';
+    separator.style.borderTop = '1px solid #ddd';
+    resultsContent.appendChild(separator);
+    
+    // Add individual result items
+    results.forEach(result => {
+        const resultItem = document.createElement('div');
+        
+        // Set appropriate class based on result type
+        let className = 'result-item dns-result';
+        let icon = '';
+        
+        if (result.success) {
+            className += ' success';
+            icon = '<i class="fas fa-check-circle result-icon"></i>';
+        } else {
+            className += ' error';
+            icon = '<i class="fas fa-times-circle result-icon"></i>';
+        }
+        
+        resultItem.className = className;
+        
+        // Create content with errors if available
+        let errorsHtml = '';
+        if (result.record_errors && result.record_errors.length > 0) {
+            errorsHtml = `
+                <div class="dns-errors">
+                    <strong>Record Errors:</strong>
+                    <ul class="error-list">
+                        ${result.record_errors.map(error => `<li>${error}</li>`).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+        
+        resultItem.innerHTML = `
+            ${icon}
+            <div class="result-details">
+                <strong>${result.domain}</strong>
+                <div class="result-message">${result.message}</div>
+                ${result.error ? `<div class="error-details">${result.error}</div>` : ''}
+                ${errorsHtml}
+            </div>
+        `;
+        
+        resultsContent.appendChild(resultItem);
     });
     
     // Show the results section

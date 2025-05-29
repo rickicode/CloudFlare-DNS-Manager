@@ -26,26 +26,7 @@
     </header>
 
     <div class="container">
-        <div class="card">
-            <h1><i class="fas fa-globe"></i> Select Domain</h1>
-            <p>Choose a domain from your Cloudflare account to manage its DNS records:</p>
-            
-            <div id="notifications"></div>
-            
-            <div class="form-group">
-                <label for="domain-search"><i class="fas fa-server"></i> Domain:</label>
-                <div class="domain-selector-container">
-                    <button type="button" class="btn btn-outline domain-selector-btn" id="open-domain-modal">
-                        <span class="selected-domain-text">Select a domain...</span>
-                        <i class="fas fa-chevron-down"></i>
-                    </button>
-                    <input type="hidden" id="selected-domain" name="selected-domain">
-                </div>
-                <small class="help-text">
-                    Click to open domain selection modal. Select a domain to manage its DNS records.
-                </small>
-            </div>
-        </div>
+        <div id="notifications"></div>
         
         <div class="card">
             <h2><i class="fas fa-plus-circle"></i> Add New Domains</h2>
@@ -85,6 +66,35 @@
             <div id="add-domains-results" class="results-log hidden">
                 <h3><i class="fas fa-list-check"></i> Domain Addition Results</h3>
                 <div id="add-domains-content" class="results-content"></div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2><i class="fas fa-plus-circle"></i> Bulk Add DNS Records</h2>
+            <p>Add DNS records to multiple domains at once. Enter records with domain specification:</p>
+            
+            <form id="bulk-dns-form">
+                <div class="form-group">
+                    <label for="bulk-dns-input"><i class="fas fa-list"></i> DNS Records to Add:</label>
+                    <textarea id="bulk-dns-input" class="form-control" rows="6" placeholder="TYPE|NAME|CONTENT|DOMAIN&#10;CNAME|product|@|abscond.my.id&#10;CNAME|product|@|camaric.biz.id&#10;A|mail|192.168.1.1|example.com" required></textarea>
+                    <small class="help-text">
+                        Format: TYPE|NAME|CONTENT|DOMAIN - where DOMAIN is the target domain to add the record to.<br>
+                        Example: CNAME|product|@|abscond.my.id will add a CNAME record "product" pointing to "@" on domain abscond.my.id<br>
+                        Supported types: A, AAAA, CNAME, MX, TXT, NS, SRV, CAA, PTR
+                    </small>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn">
+                        <i class="fas fa-plus-circle"></i> Add DNS Records to Domains
+                    </button>
+                </div>
+            </form>
+            
+            <!-- Results section for bulk DNS -->
+            <div id="bulk-dns-results" class="results-log hidden">
+                <h3><i class="fas fa-list-check"></i> Bulk DNS Addition Results</h3>
+                <div id="bulk-dns-content" class="results-content"></div>
             </div>
         </div>
         
@@ -156,46 +166,6 @@
             <!-- Pagination for Available Domains -->
             <div class="pagination-container" id="domains-pagination">
                 <!-- Pagination will be inserted here -->
-            </div>
-        </div>
-    </div>
-
-    <!-- Domain Selection Modal -->
-    <div id="domain-selection-modal" class="modal-overlay">
-        <div class="modal modal-lg">
-            <div class="modal-header">
-                <h3><i class="fas fa-server"></i> Select Domain</h3>
-                <button id="close-domain-modal" class="close-btn">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <input type="text" id="modal-domain-search" class="form-control" placeholder="Search domains...">
-                </div>
-                
-                <div class="modal-domains-container" style="display: flex; flex-direction: column; overflow: visible; min-height: 0;">
-                    <div class="records-table-container" style="flex: 1; overflow: auto; max-height: 400px; border: 1px solid #e9e9e9; border-radius: 6px; background-color: white;">
-                        <table id="modal-domains-table" class="records-table">
-                            <thead>
-                                <tr>
-                                    <th>Domain Name</th>
-                                    <th>Status</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody id="modal-domains-list">
-                                <tr>
-                                    <td colspan="3" class="loading-row">
-                                        <i class="fas fa-spinner fa-spin"></i> Loading domains...
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    
-                    <div class="modal-pagination" id="modal-pagination">
-                        <!-- Pagination will be inserted here -->
-                    </div>
-                </div>
             </div>
         </div>
     </div>
