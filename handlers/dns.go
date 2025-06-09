@@ -626,12 +626,13 @@ func UpdateDNSRecordsHandler(store *session.Store) fiber.Handler {
 				continue
 			}
 
-			// First check if ANY record with the same name exists (regardless of type)
+			// Check if any records with the same name and type exist
 			existingRecords, _, err := api.ListDNSRecords(
 				context.Background(),
 				cloudflare.ZoneIdentifier(zoneID),
 				cloudflare.ListDNSRecordsParams{
 					Name: recordName,
+					Type: recordType,
 				},
 			)
 
@@ -645,125 +646,71 @@ func UpdateDNSRecordsHandler(store *session.Store) fiber.Handler {
 				continue
 			}
 
-			// Check if we have an existing record with the same name
+			// If records with the same name and type exist, delete them first
 			if len(existingRecords) > 0 {
-				var matchingTypeRecord *cloudflare.DNSRecord
-				var sameNameRecord *cloudflare.DNSRecord
-
-				// Find if there's a record with the same name AND type, or just same name
-				for i, record := range existingRecords {
-					if record.Name == recordName {
-						sameNameRecord = &existingRecords[i]
-						if record.Type == recordType {
-							matchingTypeRecord = &existingRecords[i]
-							break
-						}
-					}
-				}
-
-				// Case 1: Record with same name and type exists - update it
-				if matchingTypeRecord != nil {
-					// Update the record
-					updateParams := cloudflare.UpdateDNSRecordParams{
-						ID:      matchingTypeRecord.ID,
-						Type:    recordType,
-						Name:    recordName,
-						Content: recordContent,
-						Proxied: &proxied,
-						TTL:     1, // Auto TTL
-					}
-
-					record, err := api.UpdateDNSRecord(context.Background(), cloudflare.ZoneIdentifier(zoneID), updateParams)
+				deletedCount := 0
+				for _, existingRecord := range existingRecords {
+					err = api.DeleteDNSRecord(context.Background(), cloudflare.ZoneIdentifier(zoneID), existingRecord.ID)
 					if err != nil {
+						// Log the error but continue with other deletions
 						results = append(results, map[string]interface{}{
 							"success": false,
 							"line":    line,
-							"message": "Failed to update DNS record",
+							"message": fmt.Sprintf("Failed to delete existing %s record %s", recordType, existingRecord.ID),
 							"error":   err.Error(),
 						})
-						continue
+					} else {
+						deletedCount++
 					}
-
-					results = append(results, map[string]interface{}{
-						"success": true,
-						"line":    line,
-						"message": fmt.Sprintf("✅ Updated %s record: %s → %s (proxied: %t)", recordType, recordName, recordContent, proxied),
-						"id":      record.ID,
-						"updated": true,
-					})
-				} else if sameNameRecord != nil {
-					// Case 2: Record with same name but different type exists - delete and recreate
-					// Delete the existing record
-					err = api.DeleteDNSRecord(context.Background(), cloudflare.ZoneIdentifier(zoneID), sameNameRecord.ID)
-					if err != nil {
-						results = append(results, map[string]interface{}{
-							"success": false,
-							"line":    line,
-							"message": fmt.Sprintf("Failed to delete existing %s record before creating %s record", sameNameRecord.Type, recordType),
-							"error":   err.Error(),
-						})
-						continue
-					}
-
-					// Create a new record with the desired type
-					recordParams := cloudflare.CreateDNSRecordParams{
-						Type:    recordType,
-						Name:    recordName,
-						Content: recordContent,
-						TTL:     1, // Auto TTL
-						Proxied: &proxied,
-					}
-
-					response, err := api.CreateDNSRecord(context.Background(), cloudflare.ZoneIdentifier(zoneID), recordParams)
-					if err != nil {
-						results = append(results, map[string]interface{}{
-							"success": false,
-							"line":    line,
-							"message": "Failed to create DNS record after deleting old record",
-							"error":   err.Error(),
-						})
-						continue
-					}
-
-					results = append(results, map[string]interface{}{
-						"success":     true,
-						"line":        line,
-						"message":     fmt.Sprintf("🔄 Changed %s record to %s: %s → %s (proxied: %t)", sameNameRecord.Type, recordType, recordName, recordContent, proxied),
-						"id":          response.ID,
-						"updated":     true,
-						"typeChanged": true,
-					})
-				}
-			} else {
-				// Case 3: No record with this name exists - create new
-				recordParams := cloudflare.CreateDNSRecordParams{
-					Type:    recordType,
-					Name:    recordName,
-					Content: recordContent,
-					TTL:     1, // Auto TTL
-					Proxied: &proxied,
 				}
 
-				// Create the record
-				response, err := api.CreateDNSRecord(context.Background(), cloudflare.ZoneIdentifier(zoneID), recordParams)
-				if err != nil {
-					results = append(results, map[string]interface{}{
-						"success": false,
-						"line":    line,
-						"message": "Failed to create DNS record",
-						"error":   err.Error(),
-					})
+				// Only proceed to create new record if all deletions were successful
+				if deletedCount != len(existingRecords) {
 					continue
 				}
-
-				results = append(results, map[string]interface{}{
-					"success": true,
-					"line":    line,
-					"message": fmt.Sprintf("➕ Created %s record: %s → %s (proxied: %t)", recordType, recordName, recordContent, proxied),
-					"id":      response.ID,
-					"created": true,
-				})
 			}
+
+			// Create the new record
+			recordParams := cloudflare.CreateDNSRecordParams{
+				Type:    recordType,
+				Name:    recordName,
+				Content: recordContent,
+				TTL:     1, // Auto TTL
+				Proxied: &proxied,
+			}
+
+			response, err := api.CreateDNSRecord(context.Background(), cloudflare.ZoneIdentifier(zoneID), recordParams)
+			if err != nil {
+				results = append(results, map[string]interface{}{
+					"success": false,
+					"line":    line,
+					"message": "Failed to create DNS record",
+					"error":   err.Error(),
+				})
+				continue
+			}
+
+			// Determine appropriate message based on whether we replaced existing records
+			var message string
+			if len(existingRecords) > 0 {
+				if len(existingRecords) == 1 {
+					message = fmt.Sprintf("🔄 Replaced %s record: %s → %s (proxied: %t)", recordType, recordName, recordContent, proxied)
+				} else {
+					message = fmt.Sprintf("🔄 Replaced %d %s records with: %s → %s (proxied: %t)", len(existingRecords), recordType, recordName, recordContent, proxied)
+				}
+			} else {
+				message = fmt.Sprintf("➕ Created %s record: %s → %s (proxied: %t)", recordType, recordName, recordContent, proxied)
+			}
+
+			results = append(results, map[string]interface{}{
+				"success":        true,
+				"line":           line,
+				"message":        message,
+				"id":             response.ID,
+				"created":        len(existingRecords) == 0,
+				"replaced":       len(existingRecords) > 0,
+				"replaced_count": len(existingRecords),
+			})
 		}
 
 		// Count successful operations
