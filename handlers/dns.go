@@ -80,20 +80,16 @@ func GetDNSRecordsHandler(store *session.Store) fiber.Handler {
 			page = 1
 		}
 
-		// Build ListDNSRecordsParams with filters
+		// Build ListDNSRecordsParams with type filter only
 		listParams := cloudflare.ListDNSRecordsParams{}
 
-		// Add search filter if provided
-		if search != "" {
-			listParams.Name = search
-		}
-
-		// Add type filter if provided
+		// Add type filter if provided (this can be applied at API level)
 		if recordType != "" {
 			listParams.Type = recordType
 		}
 
 		// Get all DNS records first (Cloudflare API doesn't support pagination for DNS records in the same way)
+		// Note: We don't apply search filter here because Cloudflare's Name parameter requires exact match
 		records, _, err := api.ListDNSRecords(context.Background(), cloudflare.ZoneIdentifier(zoneID), listParams)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -120,6 +116,20 @@ func GetDNSRecordsHandler(store *session.Store) fiber.Handler {
 				TTL:     record.TTL,
 				Proxied: proxiedValue,
 			})
+		}
+
+		// Apply search filter client-side if provided (similar to domains.go implementation)
+		if search != "" {
+			filteredRecords := []DNSRecord{}
+			searchLower := strings.ToLower(search)
+			for _, record := range allDNSRecords {
+				// Search in name and content fields for partial matches
+				if strings.Contains(strings.ToLower(record.Name), searchLower) ||
+					strings.Contains(strings.ToLower(record.Content), searchLower) {
+					filteredRecords = append(filteredRecords, record)
+				}
+			}
+			allDNSRecords = filteredRecords
 		}
 
 		// Implement pagination manually
