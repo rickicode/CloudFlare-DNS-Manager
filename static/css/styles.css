@@ -1,24 +1,24 @@
-/* Minimalist Stylesheet */
+/* Dark Mode with Pink Palette */
 :root {
-  --primary-color: #0099ff;
-  --primary-dark: #007acc;
-  --primary-light: #4db8ff;
-  --accent-color: #6c757d;
-  --accent-dark: #5a6268;
-  --background-color: #f9f9f9;
-  --text-color: #333333;
-  --text-light: #6c757d;
-  --border-color: #e9e9e9;
-  --success-color: #28a745;
-  --error-color: #dc3545;
-  --warning-color: #ffc107;
-  --info-color: #17a2b8;
-  --card-bg: #ffffff;
-  --box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  --box-shadow-strong: 0 4px 12px rgba(0, 0, 0, 0.15);
+  --primary-color: #ff6b9d;
+  --primary-dark: #e91e63;
+  --primary-light: #ffb3d1;
+  --accent-color: #c2185b;
+  --accent-dark: #ad1457;
+  --background-color: #121212;
+  --text-color: #ffffff;
+  --text-light: #b3b3b3;
+  --border-color: #333333;
+  --success-color: #4caf50;
+  --error-color: #f44336;
+  --warning-color: #ff9800;
+  --info-color: #2196f3;
+  --card-bg: #1e1e1e;
+  --box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --box-shadow-strong: 0 4px 12px rgba(0, 0, 0, 0.4);
   --transition: all 0.2s ease-in-out;
-  --border-radius: 4px;
-  --search-bg: #f8f9fa;
+  --border-radius: 8px;
+  --search-bg: #2a2a2a;
 }
 
 * {
@@ -166,7 +166,17 @@ header .container {
 .form-control:focus {
   border-color: var(--primary-color);
   outline: none;
-  box-shadow: 0 0 0 2px rgba(246, 130, 31, 0.2);
+  box-shadow: 0 0 0 2px rgba(255, 107, 157, 0.3);
+}
+
+.form-control {
+  background-color: var(--search-bg);
+  color: var(--text-color);
+  border-color: var(--border-color);
+}
+
+.form-control::placeholder {
+  color: var(--text-light);
 }
 
 textarea.form-control {
@@ -284,7 +294,7 @@ textarea.form-control {
 }
 
 .btn-logout:hover {
-  background-color: rgba(0, 0, 0, 0.05);
+  background-color: rgba(255, 255, 255, 0.1);
   color: var(--text-color);
 }
 
@@ -336,7 +346,34 @@ textarea.form-control {
 }
 
 .btn-icon.btn-delete:hover {
-  background-color: #c82333;
+  background-color: #d32f2f;
+}
+
+.btn-danger {
+  background-color: var(--error-color);
+  color: white;
+}
+
+.btn-danger:hover {
+  background-color: #d32f2f;
+}
+
+.btn-success {
+  background-color: var(--success-color);
+  color: white;
+}
+
+.btn-success:hover {
+  background-color: #388e3c;
+}
+
+.btn-primary {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: var(--primary-dark);
 }
 
 /* Notification styles */
@@ -707,7 +744,7 @@ textarea.form-control {
 }
 
 .records-table tr:hover td {
-  background-color: rgba(74, 144, 226, 0.05);
+  background-color: rgba(255, 107, 157, 0.1);
 }
 
 /* Action buttons in table */
@@ -1169,7 +1206,7 @@ textarea.form-control {
     /* Aktifkan scroll vertikal */
     overflow-x: auto;
     /* Aktifkan scroll horizontal jika diperlukan */
-    border: 1px solid #e1e5e9;
+    border: 1px solid var(--border-color);
   }
 
   /* Custom scrollbar styling */
@@ -1178,16 +1215,16 @@ textarea.form-control {
   }
 
   .records-table-container::-webkit-scrollbar-track {
-    background: #f1f1f1;
+    background: #2a2a2a;
   }
 
   .records-table-container::-webkit-scrollbar-thumb {
-    background: #c1c1c1;
+    background: #555555;
     border-radius: 4px;
   }
 
   .records-table-container::-webkit-scrollbar-thumb:hover {
-    background: #a8a8a8;
+    background: #777777;
   }
 
 
@@ -1278,7 +1315,7 @@ textarea.form-control {
   }
 
   .records-table tr:hover {
-    background-color: rgba(0, 153, 255, 0.02);
+    background-color: rgba(255, 107, 157, 0.08);
   }
 
   .records-table tr.hidden {
@@ -1769,9 +1806,9 @@ textarea.form-control {
     .domain-selector-btn {
       width: 100%;
       padding: 8px 12px;
-      border: 1px solid #d1d5db;
+      border: 1px solid var(--border-color);
       border-radius: 6px;
-      background-color: white;
+      background-color: var(--search-bg);
       cursor: pointer;
       font-size: 14px;
       line-height: 1.5;
@@ -1786,18 +1823,18 @@ textarea.form-control {
 
     .domain-selector-btn:hover {
       border-color: var(--primary-light);
-      background-color: #f9fafb;
+      background-color: var(--card-bg);
     }
 
     .domain-selector-btn:focus {
       border-color: var(--primary-color);
-      box-shadow: 0 0 0 3px rgba(0, 153, 255, 0.1);
+      box-shadow: 0 0 0 3px rgba(255, 107, 157, 0.2);
       outline: none;
     }
 
     .selected-domain-text {
       flex: 1;
-      color: #9ca3af;
+      color: var(--text-light);
     }
 
     .selected-domain-text.has-value {
@@ -1831,7 +1868,7 @@ textarea.form-control {
       overflow: auto !important;
       border: 1px solid var(--border-color);
       border-radius: 6px;
-      background-color: white;
+      background-color: var(--card-bg);
       min-height: 0;
       max-height: 400px;
       height: 400px;
@@ -1845,17 +1882,17 @@ textarea.form-control {
     }
 
     .modal-domains-container .records-table-container::-webkit-scrollbar-track {
-      background: #f7fafc;
+      background: #2a2a2a;
       border-radius: 4px;
     }
 
     .modal-domains-container .records-table-container::-webkit-scrollbar-thumb {
-      background: #cbd5e0;
+      background: #555555;
       border-radius: 4px;
     }
 
     .modal-domains-container .records-table-container::-webkit-scrollbar-thumb:hover {
-      background: #a0aec0;
+      background: #777777;
     }
 
     .modal-domains-container .records-table {
@@ -1879,6 +1916,29 @@ textarea.form-control {
       border-bottom: 1px solid var(--border-color);
     }
 
+    /* Dark mode styling for modal table headers */
+    .modal-domains-container .records-table th {
+      background-color: var(--search-bg);
+      color: var(--text-color);
+      border-bottom: 2px solid var(--border-color);
+      padding: 12px 16px;
+      font-weight: 600;
+      text-align: left;
+    }
+
+    /* Dark mode styling for modal table rows */
+    .modal-domains-container .records-table tr:hover {
+      background-color: rgba(255, 107, 157, 0.1);
+    }
+
+    .modal-domains-container .records-table tbody tr {
+      background-color: var(--card-bg);
+    }
+
+    .modal-domains-container .records-table tbody tr:nth-child(even) {
+      background-color: var(--search-bg);
+    }
+
     /* Fixed pagination at bottom */
     .modal-pagination {
       flex-shrink: 0;
@@ -1892,7 +1952,7 @@ textarea.form-control {
       min-height: 300px;
       border: 1px solid var(--border-color);
       border-radius: 6px;
-      background-color: white;
+      background-color: var(--card-bg);
       overflow-y: auto;
     }
 
@@ -1904,7 +1964,7 @@ textarea.form-control {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      background-color: white;
+      background-color: var(--card-bg);
     }
 
     .modal-domain-item:last-child {
@@ -1912,7 +1972,7 @@ textarea.form-control {
     }
 
     .modal-domain-item:hover {
-      background-color: #f8fafc;
+      background-color: rgba(255, 107, 157, 0.1);
       border-left: 3px solid var(--primary-color);
     }
 
