@@ -720,6 +720,12 @@ func UpdateDNSRecordsHandler(store *session.Store) fiber.Handler {
 				"created":        len(existingRecords) == 0,
 				"replaced":       len(existingRecords) > 0,
 				"replaced_count": len(existingRecords),
+				"record": map[string]interface{}{
+					"type":    recordType,
+					"name":    recordName,
+					"content": recordContent,
+					"proxied": proxied,
+				},
 			})
 		}
 
@@ -752,6 +758,133 @@ func UpdateDNSRecordsHandler(store *session.Store) fiber.Handler {
 			"success": true,
 			"message": message,
 			"results": results,
+		})
+	}
+}
+
+// CreateDNSRecordHandler handles creating a single DNS record
+func CreateDNSRecordHandler(store *session.Store) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		domainName := c.Params("domain")
+		if domainName == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"success": false,
+				"message": "Domain name is required",
+			})
+		}
+
+		// Parse the request body
+		type CreateRecordRequest struct {
+			Type    string `json:"type"`
+			Name    string `json:"name"`
+			Content string `json:"content"`
+			Proxied bool   `json:"proxied"`
+		}
+
+		req := new(CreateRecordRequest)
+		if err := c.BodyParser(req); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"success": false,
+				"message": "Invalid request format",
+				"error":   err.Error(),
+			})
+		}
+
+		// Get API client from session
+		api, err := GetAPIClient(c, store)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"success": false,
+				"message": "API client error",
+				"error":   err.Error(),
+			})
+		}
+
+		// Get zone ID
+		zoneID, err := api.ZoneIDByName(domainName)
+		if err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"success": false,
+				"message": "Domain not found",
+				"error":   err.Error(),
+			})
+		}
+
+		// Prepare record data
+		recordName := req.Name
+		if recordName == "@" {
+			recordName = domainName
+		} else if !strings.Contains(recordName, domainName) {
+			recordName = recordName + "." + domainName
+		}
+
+		// Handle @ symbol in CONTENT field
+		recordContent := req.Content
+		if recordContent == "@" {
+			recordContent = domainName
+		}
+
+		// For A records where CONTENT is @, we need to look up the IP of the root domain
+		if req.Type == "A" && recordContent == domainName {
+			// Get the A records for the root domain
+			rootRecords, _, err := api.ListDNSRecords(
+				context.Background(),
+				cloudflare.ZoneIdentifier(zoneID),
+				cloudflare.ListDNSRecordsParams{
+					Type: "A",
+					Name: domainName,
+				},
+			)
+			if err != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+					"success": false,
+					"message": "Failed to get IP address for root domain",
+					"error":   err.Error(),
+				})
+			}
+
+			// Check if we found any A records
+			if len(rootRecords) == 0 {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"success": false,
+					"message": "No A record found for root domain. Cannot use @ in CONTENT for A record.",
+				})
+			}
+
+			// Use the IP address from the first A record
+			recordContent = rootRecords[0].Content
+		}
+
+		proxied := req.Proxied
+
+		// Create record
+		params := cloudflare.CreateDNSRecordParams{
+			Type:    req.Type,
+			Name:    recordName,
+			Content: recordContent,
+			Proxied: &proxied,
+			TTL:     1, // Auto TTL
+		}
+
+		record, err := api.CreateDNSRecord(context.Background(), cloudflare.ZoneIdentifier(zoneID), params)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"success": false,
+				"message": "Failed to create DNS record",
+				"error":   err.Error(),
+			})
+		}
+
+		return c.JSON(fiber.Map{
+			"success": true,
+			"message": fmt.Sprintf("✅ Created %s record: %s → %s (proxied: %t)", req.Type, recordName, recordContent, proxied),
+			"record": map[string]interface{}{
+				"id":      record.ID,
+				"type":    record.Type,
+				"name":    record.Name,
+				"content": record.Content,
+				"proxied": record.Proxied != nil && *record.Proxied,
+			},
 		})
 	}
 }

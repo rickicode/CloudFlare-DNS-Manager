@@ -969,6 +969,21 @@ textarea.form-control {
   color: var(--warning-color);
 }
 
+/* Record details in results */
+.record-details {
+  margin-top: 8px;
+  padding: 8px;
+  background-color: var(--search-bg);
+  border-radius: var(--border-radius);
+  border-left: 3px solid var(--primary-color);
+}
+
+.record-details small {
+  color: var(--text-light);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 /* Loading overlay */
 .loading-overlay {
   position: fixed;

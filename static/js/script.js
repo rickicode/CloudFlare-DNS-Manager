@@ -760,6 +760,29 @@ function setupModals() {
         confirmDeleteBtn.addEventListener('click', deleteRecord);
     }
     
+    // Add record modal
+    const addModal = document.getElementById('add-record-modal');
+    const closeAddBtn = document.getElementById('close-add-modal');
+    const cancelAddBtn = document.getElementById('cancel-add');
+    const createRecordBtn = document.getElementById('create-record');
+    const addRecordBtn = document.getElementById('add-record-btn');
+    
+    if (addRecordBtn) {
+        addRecordBtn.addEventListener('click', openAddRecordModal);
+    }
+    
+    if (closeAddBtn) {
+        closeAddBtn.addEventListener('click', closeModals);
+    }
+    
+    if (cancelAddBtn) {
+        cancelAddBtn.addEventListener('click', closeModals);
+    }
+    
+    if (createRecordBtn) {
+        createRecordBtn.addEventListener('click', createNewRecord);
+    }
+    
     // Close modals when clicking outside
     if (editModal) {
         editModal.addEventListener('click', function(e) {
@@ -772,6 +795,14 @@ function setupModals() {
     if (deleteModal) {
         deleteModal.addEventListener('click', function(e) {
             if (e.target === deleteModal) {
+                closeModals();
+            }
+        });
+    }
+    
+    if (addModal) {
+        addModal.addEventListener('click', function(e) {
+            if (e.target === addModal) {
                 closeModals();
             }
         });
@@ -1813,8 +1844,8 @@ function setupDNSForm() {
                 // Reload DNS records
                 loadDNSRecords(domain);
                 
-                // Clear the form after successful submission
-                document.getElementById('dns-records').value = '';
+                // Don't clear the form - preserve textarea values as requested
+                // document.getElementById('dns-records').value = '';
             } else {
                 const errorMessage = data.message || 'Failed to update DNS records';
                 showNotification(`❌ Error: ${errorMessage}`, 'error');
@@ -2854,4 +2885,78 @@ function clearAllSavedCredentials() {
         
         showNotification('All saved credentials cleared', 'info');
     }
+}
+
+// Add Record Modal Functions
+function openAddRecordModal() {
+    const modal = document.getElementById('add-record-modal');
+    if (modal) {
+        // Clear the form
+        document.getElementById('add-record-type').value = 'A';
+        document.getElementById('add-record-name').value = '';
+        document.getElementById('add-record-content').value = '';
+        document.getElementById('add-record-proxied').checked = true;
+        
+        // Show the modal
+        modal.classList.add('active');
+    }
+}
+
+function createNewRecord() {
+    const domain = getCurrentDomain();
+    if (!domain) {
+        showNotification('Domain not found', 'error');
+        return;
+    }
+    
+    const type = document.getElementById('add-record-type').value;
+    const name = document.getElementById('add-record-name').value.trim();
+    const content = document.getElementById('add-record-content').value.trim();
+    const proxied = document.getElementById('add-record-proxied').checked;
+    
+    // Validate form
+    if (!type || !name || !content) {
+        showNotification('Please fill in all required fields', 'error');
+        return;
+    }
+    
+    // Disable button
+    const createBtn = document.getElementById('create-record');
+    const originalText = createBtn.textContent;
+    createBtn.disabled = true;
+    createBtn.textContent = 'Creating...';
+    
+    // Send create request
+    fetch(`/api/dns/${domain}/create`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            type: type,
+            name: name,
+            content: content,
+            proxied: proxied
+        }),
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification(data.message || 'DNS record created successfully', 'success');
+            
+            // Close modal and reload records
+            closeModals();
+            loadDNSRecords(domain);
+        } else {
+            showNotification(`❌ Error: ${data.message || 'Failed to create DNS record'}`, 'error');
+        }
+    })
+    .catch(error => {
+        showNotification(`Error: ${error.message || 'Something went wrong'}`, 'error');
+    })
+    .finally(() => {
+        // Re-enable button
+        createBtn.disabled = false;
+        createBtn.textContent = originalText;
+    });
 }
