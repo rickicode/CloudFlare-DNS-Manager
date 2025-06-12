@@ -429,7 +429,7 @@ textarea.form-control {
   border-left: 4px solid #007bff;
   padding: 15px;
   margin-bottom: 15px;
-  background-color: #f8f9fa;
+  background-color: #000000;
   border-radius: 4px;
   overflow: visible;
 }
@@ -945,7 +945,7 @@ textarea.form-control {
   padding: 15px;
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius);
-  background-color: #f9f9f9;
+  background-color: #000000;
 }
 
 .results-log h3 {
