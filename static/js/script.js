@@ -1845,7 +1845,6 @@ function setupDNSForm() {
                 loadDNSRecords(domain);
                 
                 // Don't clear the form - preserve textarea values as requested
-                // document.getElementById('dns-records').value = '';
             } else {
                 const errorMessage = data.message || 'Failed to update DNS records';
                 showNotification(`❌ Error: ${errorMessage}`, 'error');
@@ -1858,6 +1857,7 @@ function setupDNSForm() {
             // Re-enable form
             submitBtn.disabled = false;
             submitBtn.textContent = originalText;
+			document.getElementById('dns-records').value = '';
         });
     });
 }
@@ -1883,14 +1883,15 @@ function loadDNSRecords(domain, page = 1, search = '') {
     `;
     
     // Build query parameters
-    const queryParams = new URLSearchParams({
-        page: page.toString(),
-        per_page: '20'
-    });
-    
+    const queryParams = new URLSearchParams();
+
     if (search) {
         queryParams.append('search', search);
+    } else {
+        queryParams.append('page', page.toString());
+        queryParams.append('per_page', '50');
     }
+    
     
     fetch(`/api/dns/${domain}?${queryParams.toString()}`)
         .then(response => response.json())
@@ -2042,7 +2043,7 @@ function displayDNSPaginationControls(pagination, currentPage, currentSearch) {
     }
     
     for (let i = startPage; i <= endPage; i++) {
-        const isActive = i === page ? ' active' : '';
+        const isActive = i === parseInt(page) ? ' active' : '';
         paginationHTML += `<button class="btn btn-outline btn-sm${isActive}" onclick="loadDNSRecords('${getCurrentDomain()}', ${i}, '${currentSearch}')">${i}</button>`;
     }
     

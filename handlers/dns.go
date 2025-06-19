@@ -132,33 +132,39 @@ func GetDNSRecordsHandler(store *session.Store) fiber.Handler {
 			allDNSRecords = filteredRecords
 		}
 
-		// Implement pagination manually
-		totalCount := len(allDNSRecords)
-		totalPages := (totalCount + perPage - 1) / perPage
+		// Implement pagination manually only when search is empty
+		var paginatedRecords []DNSRecord
+		pagination := map[string]interface{}{}
 
-		// Calculate start and end indices
-		startIndex := (page - 1) * perPage
-		endIndex := startIndex + perPage
+		if search == "" {
+			totalCount := len(allDNSRecords)
+			totalPages := (totalCount + perPage - 1) / perPage
 
-		if startIndex >= totalCount {
-			startIndex = 0
-			endIndex = 0
-		} else if endIndex > totalCount {
-			endIndex = totalCount
-		}
+			// Calculate start and end indices
+			startIndex := (page - 1) * perPage
+			endIndex := startIndex + perPage
 
-		// Get the paginated slice
-		paginatedRecords := []DNSRecord{}
-		if startIndex < endIndex {
-			paginatedRecords = allDNSRecords[startIndex:endIndex]
-		}
+			if startIndex >= totalCount {
+				startIndex = 0
+				endIndex = 0
+			} else if endIndex > totalCount {
+				endIndex = totalCount
+			}
 
-		// Build pagination info
-		pagination := map[string]interface{}{
-			"page":        page,
-			"per_page":    perPage,
-			"total_count": totalCount,
-			"total_pages": totalPages,
+			// Get the paginated slice
+			if startIndex < endIndex {
+				paginatedRecords = allDNSRecords[startIndex:endIndex]
+			}
+
+			// Build pagination info
+			pagination = map[string]interface{}{
+				"page":        page,
+				"per_page":    perPage,
+				"total_count": totalCount,
+				"total_pages": totalPages,
+			}
+		} else {
+			paginatedRecords = allDNSRecords
 		}
 
 		return c.JSON(fiber.Map{
@@ -712,6 +718,13 @@ func UpdateDNSRecordsHandler(store *session.Store) fiber.Handler {
 				message = fmt.Sprintf("➕ Created %s record: %s → %s (proxied: %t)", recordType, recordName, recordContent, proxied)
 			}
 
+			recordData := map[string]interface{}{
+				"type":    recordType,
+				"name":    recordName,
+				"content": recordContent,
+				"proxied": proxied,
+			}
+
 			results = append(results, map[string]interface{}{
 				"success":        true,
 				"line":           line,
@@ -720,12 +733,7 @@ func UpdateDNSRecordsHandler(store *session.Store) fiber.Handler {
 				"created":        len(existingRecords) == 0,
 				"replaced":       len(existingRecords) > 0,
 				"replaced_count": len(existingRecords),
-				"record": map[string]interface{}{
-					"type":    recordType,
-					"name":    recordName,
-					"content": recordContent,
-					"proxied": proxied,
-				},
+				"record": 			recordData,
 			})
 		}
 

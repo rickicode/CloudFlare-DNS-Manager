@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -82,9 +83,15 @@ func main() {
 	// Routes
 	setupRoutes(app)
 
+	// Determine port
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "3007" // Default port if not specified
+	}
+
 	// Start server
-	log.Println("Starting server on http://localhost:3000")
-	log.Fatal(app.Listen(":3000"))
+	log.Printf("Starting server on http://localhost:%s", port)
+	log.Fatal(app.Listen(":" + port))
 }
 
 // setupRoutes configures all application routes
